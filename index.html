@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jukebox</title>
+    <title>My YouTube Jukebox</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; }
         .container { width: 90%; max-width: 1000px; padding: 20px; display: grid; grid-template-columns: 1fr 350px; gap: 20px; }
@@ -49,12 +49,13 @@
 </div>
 
 <script>
+    const API_KEY = 'AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0'; // Incolla qui la tua API Key
     let queue = [];
     let player;
 
     // 1. Carica le IFrame API
     var tag = document.createElement('script');
-    tag.src = "https://www.youtube.com";
+    tag.src = "https://www.youtube.com/iframe_api/";
     var firstScriptTag = document.getElementsByTagName('script')[0];
     firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
@@ -68,13 +69,12 @@
         });
     }
 
-    // 2. Cerca Video 
+    // 2. Cerca Video tramite API
     async function cercaVideo() {
         const q = document.getElementById('query').value;
         if (!q) return;
         
-        const url = `https://www.googleapis.com{encodeURIComponent(q)}&type=video&key=AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0`;
-        
+const url = 'https://www.googleapis.com' + encodeURIComponent(q) + '&type=video&key=' + API_KEY
         try {
             const res = await fetch(url);
             const data = await res.json();
