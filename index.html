@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<body style="background-color: #222; display: flex; justify-content: center; padding-top: 50px;">
+    
+    <div id="player"></div>
+
+    <script>
+        // 1. CARICAMENTO API (L'indirizzo deve essere completo!)
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api/"; 
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        // 2. CREAZIONE DEL PLAYER
+        var player;
+        function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+                height: '360',
+                width: '640',
+                videoId: 'jULlUasuxQk', // ID di prova funzionante
+                playerVars: {
+                    'playsinline': 1,
+                    'origin': window.location.origin
+                },
+                events: {
+                    'onReady': onPlayerReady
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            console.log("Il player è pronto!");
+        }
+    </script>
+</body>
+</html>
