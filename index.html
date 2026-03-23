@@ -328,6 +328,38 @@
         }
     }
 
+
+    let searchTimeout;
+async function searchYouTube(q) {
+    const container = document.getElementById("youtube-results");
+    if (!q || q.length < 3) { container.innerHTML = ""; return; }
+
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(async () => {
+        const key = "LA_TUA_API_KEY_QUI"; // Assicurati che sia attiva nella Google Console
+        const searchUrl = `https://www.googleapis.com{encodeURIComponent(q)}&type=video&maxResults=3&key=${key}`;
+
+        try {
+            const res = await fetch(searchUrl);
+            if (res.status === 403) {
+                showToast("⚠️ Quota YouTube Esaurita per oggi!");
+                return;
+            }
+            const data = await res.json();
+            if (data.items && data.items.length > 0) {
+                // Recuperiamo gli ID per la seconda chiamata (durata)
+                const ids = data.items.map(item => item.id.videoId).join(',');
+                fetchDurationsAndRender(ids, data.items, key);
+            }
+        } catch (err) {
+            console.error("Errore ricerca:", err);
+        }
+    }, 600); // Aspetta 600ms dopo l'ultimo carattere digitato
+}
+
+
+    
+
     async function searchYouTube(q) {
         const container = document.getElementById("youtube-results");
         if (!q || q.length < 3) { container.innerHTML = ""; return; }
@@ -527,28 +559,65 @@
         updateExpandedView(item);
     }
 
-    function renderYouTubeResults(items) {
-        const container = document.getElementById("youtube-results");
-        container.innerHTML = "";
-        items.forEach(item => {
-            const video = {
-                type: "youtube",
-                id: item.id.videoId,
-                title: item.snippet.title,
-                thumb: item.snippet.thumbnails.default.url
-            };
-            const el = document.createElement("div");
-            el.className = "track-item";
-            el.onclick = () => { queue.push(video); renderQueue(); showToast("In Coda"); };
-            el.innerHTML = `
-                <div class="track-cover"><img src="${video.thumb}"></div>
-                <div class="track-info">
-                    <span class="track-name">${video.title}</span>
-                    <div class="track-meta-row"><span>YouTube</span><span class="file-format">YT</span></div>
-                </div>`;
-            container.appendChild(el);
+async function fetchDurationsAndRender(ids, items, key) {
+    const videoUrl = `https://www.googleapis.com{ids}&key=${key}`;
+    try {
+        const res = await fetch(videoUrl);
+        const data = await res.json();
+        
+        // Mappiamo le durate agli ID video
+        const durations = {};
+        data.items.forEach(v => {
+            const iso = v.contentDetails.duration;
+            const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+            const hrs = (parseInt(match[1]) || 0);
+            const mins = (parseInt(match[2]) || 0) + (hrs * 60);
+            const secs = (parseInt(match[3]) || 0).toString().padStart(2, '0');
+            durations[v.id] = `${mins}:${secs}`;
         });
-    }
+
+        renderYouTubeResults(items, durations);
+    } catch (err) { console.error("Errore durate:", err); }
+}
+
+function renderYouTubeResults(items, durations) {
+    const container = document.getElementById("youtube-results");
+    container.innerHTML = "";
+
+    items.forEach((item, i) => {
+        const vId = item.id.videoId;
+        const videoObj = {
+            type: "youtube",
+            id: vId,
+            title: item.snippet.title,
+            thumb: item.snippet.thumbnails.high.url, // Qualità migliore
+            duration: durations[vId] || "0:00"
+        };
+
+        const el = document.createElement("div");
+        el.className = "track-item";
+        el.innerHTML = `
+            <div class="track-cover"><img src="${videoObj.thumb}"></div>
+            <div class="track-info">
+                <span class="track-name">${videoObj.title}</span>
+                <div class="track-meta-row">
+                    <span>YouTube</span>
+                    <span class="file-format">YT</span>
+                    <span style="color:var(--primary); font-weight:bold;">${videoObj.duration}</span>
+                </div>
+            </div>`;
+
+        // Abilitiamo lo swipe identico ai brani locali
+        // Usiamo un indice negativo o speciale per non entrare in conflitto con la playlist locale
+        setupSwipe(el, -1, videoObj); 
+        
+        // Click per riproduzione immediata
+        el.querySelector('.track-info').onclick = () => playItem(videoObj);
+        
+        container.appendChild(el);
+    });
+}
+
 </script>
 
 
@@ -701,12 +770,20 @@
         el.ontouchend = () => {
             el.style.transition = '0.3s ease'; el.style.transform = 'translateX(0)'; el.style.backgroundColor = '';
             if (isSwipe && Math.abs(cX) > 50) {
-                if (navigator.vibrate) navigator.vibrate(30);
-                cX > 0 ? (queue.unshift(playlist[idx]), showToast("In cima")) : (queue.push(playlist[idx]), showToast("In fondo"));
-                renderQueue();
+            const targetTrack = externalObj ? externalObj : playlist[idx];
+            if (cX > 0) {
+                queue.unshift(targetTrack);
+                showToast("In cima alla coda");
+            } else {
+                queue.push(targetTrack);
+                showToast("In fondo alla coda");
             }
-        };
-    }
+            renderQueue();
+        }
+    };
+}
+
+        
 </script>
 
 
