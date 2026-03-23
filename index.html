@@ -288,6 +288,9 @@
 
 
 <script>
+
+<script>
+    // --- 1. COSTANTI E VARIABILI DI STATO ---
     const audio = document.getElementById('main-audio');
     const input = document.getElementById('folderInput');
     const libraryEl = document.getElementById('library');
@@ -298,144 +301,74 @@
     const timeCurrent = document.getElementById('time-current');
     const timeTotal = document.getElementById('time-total');
 
-    let playlist = [];
-    let queue = [];
-let currentPlayingIdx = -1; // Il brano che senti ORA (ovunque arrivi)
-let lastManualLibraryIdx = -1; // L'ultimo brano cliccato nella libreria (per la riproduzione automatica)
-let lastQueueSourceIdx = -1; // Se il brano viene dalla coda, l'indice originale in libreria
+    let playlist = []; // Database brani locali
+    let queue = [];    // Coda di riproduzione (Mix Locale/YouTube)
+    let currentPlayingTrack = null; // Oggetto brano in esecuzione
+    let lastManualLibraryIdx = -1;  // Punto di ripresa in libreria
+    let playHistory = [];
+    
     let isLooping = false;
     let isShuffle = false;
-    let shuffleOrder = [];
-    let playHistory = [];
-    let startTime = null; // Per Punto 1
-    
-    
-    
-let ytPlayer = null;
+    let startTime = null;
+    let ytPlayer = null;
 
-function onYouTubeIframeAPIReady() {
-    ytPlayer = new YT.Player('yt-player', {
-        height: '0',
-        width: '0',
-        videoId: '',
-        playerVars: { playsinline: 1 },
-        events: {
-            onStateChange: onYTStateChange
+    // --- 2. INTEGRAZIONE YOUTUBE API ---
+    function onYouTubeIframeAPIReady() {
+        ytPlayer = new YT.Player('yt-player', {
+            height: '0', width: '0', videoId: '',
+            playerVars: { 'playsinline': 1, 'controls': 0 },
+            events: { 'onStateChange': onYTStateChange }
+        });
+    }
+
+    function onYTStateChange(e) {
+        // Se il video YouTube finisce, passa al prossimo
+        if (e.data === YT.PlayerState.ENDED) {
+            document.getElementById('btn-next').click();
         }
-    });
-}
-
-function onYTStateChange(e) {
-    if (e.data === YT.PlayerState.ENDED) {
-        document.getElementById('btn-next').click();
-    }
-}
-
-async function searchYouTube(q) {
-    const container = document.getElementById("youtube-results");
-    if (!q) {
-        container.innerHTML = "";
-        return;
     }
 
-    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=10&key=AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0`;
+    async function searchYouTube(q) {
+        const container = document.getElementById("youtube-results");
+        if (!q || q.length < 3) { container.innerHTML = ""; return; }
 
-    try {
-        const res = await fetch(url);
-        const data = await res.json();
-        if (!data.items) return;
+        // Nota: In produzione l'API Key andrebbe protetta
+        const key = "AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0";
+        const url = `https://www.googleapis.com{encodeURIComponent(q)}&type=video&maxResults=5&key=${key}`;
 
-        renderYouTubeResults(data.items);
-    } catch (err) {
-        console.error("Errore YouTube:", err);
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.items) renderYouTubeResults(data.items);
+        } catch (err) { console.error("Errore YT:", err); }
     }
-}
-
-function renderYouTubeResults(items) {
-    const container = document.getElementById("youtube-results");
-    container.innerHTML = "";
-
-    items.forEach(item => {
-        const video = {
-            type: "youtube",
-            id: item.id.videoId,
-            title: item.snippet.title,
-            thumb: item.snippet.thumbnails.default.url
-        };
-
-        const el = document.createElement("div");
-        el.className = "track-item";
-        el.onclick = () => addToQueueYouTube(video);
-
-        el.innerHTML = `
-            <div class="track-cover"><img src="${video.thumb}"></div>
-            <div class="track-info">
-                <span class="track-name">${video.title}</span>
-                <div class="track-meta-row">
-                    <span>YouTube</span>
-                    <span class="file-format">YT</span>
-                </div>
-            </div>
-        `;
-
-        container.appendChild(el);
-    });
-}
-
-
-function addToQueueYouTube(video) {
-    queue.push(video);
-    renderQueue();
-    showToast("Aggiunto alla coda");
-}
-
-function playItem(item) {
-    if (item.type === "youtube") {
-        audio.pause();
-        ytPlayer.loadVideoById(item.id);
-        nowPlayingTitle.textContent = item.title;
-        updateUI();
-        return;
-    }
-
-    // File locale
-    const idx = playlist.indexOf(item);
-    playTrack(idx);
-}
-
-
-
-
-
-
-
-
+</script>
 
 
     
-    
-  
-    
-
+<script>
+    // --- 3. ICONE GRAFICHE (SVG E HTML) ---
     const DRAW = {
         play: '<div style="width:0; height:0; border-left:18px solid #000; border-top:12px solid transparent; border-bottom:12px solid transparent; margin-left:5px;"></div>',
         pause: '<div style="display:flex; gap:6px;"><div style="width:6px; height:22px; background:#000; border-radius:2px;"></div><div style="width:6px; height:22px; background:#000; border-radius:2px;"></div></div>',
         next: '<div style="display:flex; align-items:center;"><div style="width:0; height:0; border-left:12px solid #fff; border-top:8px solid transparent; border-bottom:8px solid transparent;"></div><div style="width:3px; height:16px; background:#fff; border-radius:1px;"></div></div>',
         prev: '<div style="display:flex; align-items:center;"><div style="width:3px; height:16px; background:#fff; border-radius:1px;"></div><div style="width:0; height:0; border-right:12px solid #fff; border-top:8px solid transparent; border-bottom:8px solid transparent;"></div></div>',
-        loop: (active) => `<div style="width:20px; height:14px; border:2px solid ${active ? '#1db954' : '#888'}; border-radius:4px; position:relative;"><div style="position:absolute; top:-5px; right:5px; width:5; height:9; border-left:6px solid ${active ? '#1db954' : '#888'}; border-top:3px solid transparent; border-bottom:3px solid transparent; transform:rotate(-180deg);"></div></div>`,
-        shuffle: (active) => `<div style="width:24px; height:18px; position:relative; display:flex; align-items:center;">  <!-- Linea Superiore (da sinistra a destra-giù) --><div style="position:absolute; width:100%; height:100%;">    <svg viewBox="0 0 24 18" style="fill:none; stroke:${active ? '#1db954' : '#888'}; stroke-width:2; stroke-linecap:round;">      <path d="M2,14 L6,14 C9,14 11,4 14,4 L20,4" />      <path d="M2,4 L6,4 C9,4 11,14 14,14 L20,14" />    </svg>    <!-- Punta freccia superiore -->   <div style="position:absolute; top:1px; right:0; width:0; height:0; border-left:5px solid ${active ? '#1db954' : '#888'}; border-top:3px solid transparent; border-bottom:3px solid transparent;"></div>    <!-- Punta freccia inferiore -->    <div style="position:absolute; bottom:1px; right:0; width:0; height:0; border-left:5px solid ${active ? '#1db954' : '#888'}; border-top:3px solid transparent; border-bottom:3px solid transparent;"></div>  </div></div>`,
+        loop: (active) => `<div style="width:20px; height:14px; border:2px solid ${active ? '#1db954' : '#888'}; border-radius:4px; position:relative;"><div style="position:absolute; top:-5px; right:5px; width:0; height:0; border-left:6px solid ${active ? '#1db954' : '#888'}; border-top:3px solid transparent; border-bottom:3px solid transparent; transform:rotate(-180deg);"></div></div>`,
+        shuffle: (active) => `<div style="width:24px; height:18px; position:relative; display:flex; align-items:center;"><svg viewBox="0 0 24 18" style="fill:none; stroke:${active ? '#1db954' : '#888'}; stroke-width:2; stroke-linecap:round;"><path d="M2,14 L6,14 C9,14 11,4 14,4 L20,4" /><path d="M2,4 L6,4 C9,4 11,14 14,14 L20,14" /></svg></div>`,
         up: '<div style="width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-bottom:10px solid #1db954;"></div>',
         down: '<div style="width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-top:10px solid #1db954;"></div>',
         x: '<div style="position:relative; width:16px; height:16px;"><div style="position:absolute; top:7px; left:0; width:16px; height:2px; background:#ff4444; transform:rotate(45deg);"></div><div style="position:absolute; top:7px; left:0; width:16px; height:2px; background:#ff4444; transform:rotate(-45deg);"></div></div>'
     };
 
+    // --- 4. CARICAMENTO E SCANSIONE CARTELLE ---
     input.onchange = async (e) => {
         if(!startTime) startTime = new Date();
-        const files = [...e.target.files].filter(f =>     f.type.startsWith("audio/") || f.type.startsWith("video/"));
+        const files = [...e.target.files].filter(f => f.type.startsWith("audio/") || f.type.startsWith("video/"));
         const newFolders = {};
+
         files.forEach(f => {
             const parts = f.webkitRelativePath.split("/"); parts.pop();
-            const path = parts.join("/") || "Root";
+            const path = parts.join("/") || "Libreria Principale";
             if (!newFolders[path]) newFolders[path] = [];
             newFolders[path].push(f);
         });
@@ -446,575 +379,416 @@ function playItem(item) {
             const header = document.createElement('div');
             header.className = 'folder-name';
             header.innerHTML = `📁 ${path}`;
+            
             const container = document.createElement('div');
+            container.style.display = 'none';
             header.onclick = () => container.style.display = container.style.display === 'none' ? 'block' : 'none';
             group.append(header, container);
 
             for (const file of newFolders[path]) {
                 const idx = playlist.length;
-                playlist.push({ file, folder: path, cover: null });
-                container.appendChild(createTrackItem(file, path, idx));
+                const trackObj = { type: "local", file, folder: path, cover: null, id: idx };
+                playlist.push(trackObj);
+                container.appendChild(createTrackItem(trackObj, idx));
                 extractCover(file, idx);
                 getDuration(file, idx);
             }
             libraryEl.appendChild(group);
         }
+        showToast("Libreria Aggiornata");
     };
+</script>
 
-async function extractCover(file, idx) {
-    // Caso VIDEO: estraiamo un fotogramma
-    if (file.type.startsWith("video/")) {
-        const video = document.createElement('video');
-        video.src = URL.createObjectURL(file);
-        video.muted = true;
-        
-        video.onloadeddata = () => {
-            // Ci spostiamo a 1 secondo (o 0.1) per evitare il nero iniziale
-            video.currentTime = 1; 
-        };
 
-        video.onseeked = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 160; // Risoluzione bassa per velocità e memoria
-            canvas.height = 160;
-            const ctx = canvas.getContext('2d');
-            
-            // Ritaglio centrale (crop square) per l'estetica della tua app
-            const size = Math.min(video.videoWidth, video.videoHeight);
-            const x = (video.videoWidth - size) / 2;
-            const y = (video.videoHeight - size) / 2;
-            
-            ctx.drawImage(video, x, y, size, size, 0, 0, 160, 160);
-            
-            const imageUrl = canvas.toDataURL('image/jpeg', 0.7);
-            playlist[idx].cover = imageUrl;
-            
-            const imgContainer = document.getElementById(`cov-${idx}`);
-            if (imgContainer) imgContainer.innerHTML = `<img src="${imageUrl}">`;
-            
-            // Pulizia memoria
-            URL.revokeObjectURL(video.src);
-            video.remove();
-        };
-        return;
-    }
 
-    // Caso AUDIO: rimane la tua logica attuale con jsmediatags
-    if (window.jsmediatags && file.type.startsWith("audio/")) {
-        jsmediatags.read(file, {
-            onSuccess: function(tag) {
-                const pic = tag.tags.picture;
-                if (pic) {
-                    const blob = new Blob([new Uint8Array(pic.data)], { type: pic.format });
-                    const imageUrl = URL.createObjectURL(blob);
-                    playlist[idx].cover = imageUrl;
-                    const imgContainer = document.getElementById(`cov-${idx}`);
-                    if (imgContainer) imgContainer.innerHTML = `<img src="${imageUrl}">`;
+<script>
+    // --- 5. ESTRAZIONE COPERTINE (AUDIO/VIDEO) E DURATA ---
+    async function extractCover(file, idx) {
+        if (file.type.startsWith("video/")) {
+            const video = document.createElement('video');
+            video.src = URL.createObjectURL(file);
+            video.muted = true;
+            video.onloadeddata = () => video.currentTime = 1;
+            video.onseeked = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 160; canvas.height = 160;
+                const ctx = canvas.getContext('2d');
+                const size = Math.min(video.videoWidth, video.videoHeight);
+                const x = (video.videoWidth - size) / 2;
+                const y = (video.videoHeight - size) / 2;
+                ctx.drawImage(video, x, y, size, size, 0, 0, 160, 160);
+                
+                const imageUrl = canvas.toDataURL('image/jpeg', 0.7);
+                playlist[idx].cover = imageUrl;
+                const imgContainer = document.getElementById(`cov-${idx}`);
+                if (imgContainer) imgContainer.innerHTML = `<img src="${imageUrl}">`;
+                
+                URL.revokeObjectURL(video.src);
+                video.remove();
+            };
+            return;
+        }
+
+        if (window.jsmediatags && file.type.startsWith("audio/")) {
+            jsmediatags.read(file, {
+                onSuccess: function(tag) {
+                    const pic = tag.tags.picture;
+                    if (pic) {
+                        const blob = new Blob([new Uint8Array(pic.data)], { type: pic.format });
+                        const imageUrl = URL.createObjectURL(blob);
+                        playlist[idx].cover = imageUrl;
+                        const imgContainer = document.getElementById(`cov-${idx}`);
+                        if (imgContainer) imgContainer.innerHTML = `<img src="${imageUrl}">`;
+                    }
                 }
-            }
-        });
+            });
+        }
     }
-}
 
+    function getDuration(f, i) {
+        const a = new Audio();
+        const url = URL.createObjectURL(f);
+        a.src = url;
+        a.onloadedmetadata = () => {
+            const m = Math.floor(a.duration/60), s = Math.floor(a.duration%60).toString().padStart(2,'0');
+            const el = document.getElementById(`dur-${i}`);
+            if(el) el.textContent = `${m}:${s}`;
+            URL.revokeObjectURL(url);
+            a.remove();
+        };
+    }
 
-    function createTrackItem(file, path, idx) {
+    // --- 6. CREAZIONE ELEMENTO TRACCIA ---
+    function createTrackItem(track, idx) {
         const item = document.createElement('div');
-        const ext = file.name.split('.').pop();
+        const ext = track.file.name.split('.').pop();
         item.className = 'track-item';
         item.innerHTML = `
             <div class="track-cover" id="cov-${idx}">🎵</div>
             <div class="track-info" onclick="playTrack(${idx})">
-                <span class="track-name">${file.name.replace(/\.[^/.]+$/, "")}</span>
+                <span class="track-name">${track.file.name.replace(/\.[^/.]+$/, "")}</span>
                 <div class="track-meta-row">
-                    <span>${path.split('/').pop()}</span>
-                   <span class="file-format">${ext}</span>
-                    <span id="dur-${idx}" 9="color:var(--primary); font-weight:bold;">...</span>
+                    <span>${track.folder.split('/').pop()}</span>
+                    <span class="file-format">${ext}</span>
+                    <span id="dur-${idx}" style="color:var(--primary); font-weight:bold;">...</span>
                 </div>
             </div>`;
         setupSwipe(item, idx);
         return item;
     }
+</script>
 
+
+    
+<script>
+    // --- 7. LOGICA DI RIPRODUZIONE ---
     function playTrack(idx, fromQueue = false, isBack = false) {
-    if (idx < 0 || idx >= playlist.length) return;
-
-    // 1. Gestione Cronologia
-    if (!isBack && currentPlayingIdx !== -1 && currentPlayingIdx !== idx) {
-        playHistory.push(currentPlayingIdx);
-    }
-
-    // 2. Aggiornamento Indici
-    currentPlayingIdx = idx;
-    if (!fromQueue) {
-        lastManualLibraryIdx = idx; // Ricorda il punto nella libreria
-    }
-
-    // 3. Riproduzione effettiva
-    const track = playlist[idx];
-    audio.src = URL.createObjectURL(track.file);
-    audio.play();
-    
-    // 4. Sincronizzazione Interfaccia
-    nowPlayingTitle.textContent = track.file.name.replace(/\.[^/.]+$/, "");
-    updateUI(); 
-    updateExpandedView(idx); // Aggiorna video/immagine nel player
-
-    // 5. MediaSession (come prima...)
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: nowPlayingTitle.textContent,
-            artist: track.folder.split('/').pop(),
-            artwork: [{ src: track.cover || 'https://placehold.co', sizes: '512x512', type: 'image/png' }]
-        });
-    }
-}
-
-
-function renderQueue() {
-    queueListEl.innerHTML = "";
-    document.getElementById('queue-section').style.display = queue.length ? 'block' : 'none';
-
-    queue.forEach((t, i) => {
-        const item = document.createElement('div');
-
-        let title = "";
-        if (t.type === "youtube") title = t.title;
-        else title = t.file.name;
-
-        item.innerHTML = `
-            <div style="flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:0.85rem;">
-                ${title}
-            </div>
-            <div style="display:flex; gap:12px; margin-left:10px; align-items:center;">
-                <div onclick="moveQ(${i},-1)">${i > 0 ? DRAW.up : ''}</div>
-                <div onclick="moveQ(${i},1)">${i < queue.length-1 ? DRAW.down : ''}</div>
-                <div onclick="remQ(${i})">${DRAW.x}</div>
-            </div>
-        `;
-
-        queueListEl.appendChild(item);
-    });
-}
-
-
-    function renderPlaylists() {
-        const listEl = document.getElementById('saved-playlists-list');
-        const all = JSON.parse(localStorage.getItem('f_p') || '{}');
-        listEl.innerHTML = "";
-        Object.keys(all).forEach(name => {
-            const div = document.createElement('div');
-            div.innerHTML = `<div style="flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:0.85rem;">${name}</div>
-                <div style="display:flex; gap:12px; margin-left:10px; align-items:center;">
-                    <div onclick="loadP('${name}')" style="color:var(--primary); font-weight:bold; font-size:0.7rem; cursor:pointer;">CARICA</div>
-                    <div onclick="delP('${name}')">${DRAW.x}</div>
-                </div>`;
-            listEl.appendChild(div);
-        });
-    }
-
-    document.getElementById('save-history-btn').onclick = () => {
-        if (!playHistory.length || !startTime) return showToast("Vuota!");
-        const now = new Date();
-        const startH = startTime.getHours();
-        const startM = startTime.getMinutes().toString().padStart(2, '0');
+        if (idx < 0 || idx >= playlist.length) return;
+        const track = playlist[idx];
         
-        // Punto 1: Calcolo H24+
-        const diffDays = Math.floor((now - startTime) / (1000 * 60 * 60 * 24));
-        const endH = now.getHours() + (diffDays * 24);
-        const endM = now.getMinutes().toString().padStart(2, '0');
-        
-        const dateStr = `${startTime.getDate()}/${startTime.getMonth()+1}/${startTime.getFullYear().toString().slice(-2)}`;
-        const name = `${dateStr} ${startH}:${startM}-${endH}:${endM}`;
-        
-        const all = JSON.parse(localStorage.getItem('f_p') || '{}');
-        all[name] = playHistory.map(idx => {
-    const t = playlist[idx];
-    if (t.type === "youtube") {
-        return { yt: true, id: t.id, title: t.title };
-    }
-    return { n: t.file.name, f: t.folder };
-});
-        localStorage.setItem('f_p', JSON.stringify(all));
-        renderPlaylists();
-        showToast("Cronologia Salvata");
-    };
-
-    // --- LOGICA DI SUPPORTO (Next, Prev, Shuffle, UI, Swipe) ---
-    function updateUI() {
-    // 1. Ripristino icone Play/Pause
-    playBtn.innerHTML = audio.paused ? DRAW.play : DRAW.pause;
-    
-    // 2. Ripristino icone Avanti e Indietro (Le righe che mancavano!)
-    document.getElementById('btn-next').innerHTML = DRAW.next;
-    document.getElementById('btn-prev').innerHTML = DRAW.prev;
-    
-    // 3. Ripristino icone Loop e Shuffle
-    document.getElementById('btn-loop').innerHTML = DRAW.loop(isLooping);
-    document.getElementById('btn-shuffle').innerHTML = DRAW.shuffle(isShuffle);
-
-    // 4. Gestione evidenziazione nella lista (Doppio Verde)
-    document.querySelectorAll('.track-item').forEach((el, i) => {
-        el.classList.remove('playing', 'last-pos');
-        
-        // Verde Brillante: Quello che stai ascoltando ORA
-        if (i === currentPlayingIdx) {
-            el.classList.add('playing');
-        } 
-        // Verde Scuro: L'ultimo brano selezionato nella libreria (punto di ripresa)
-        else if (i === lastManualLibraryIdx) {
-            el.classList.add('last-pos');
+        if (!isBack && currentPlayingTrack && currentPlayingTrack.id !== track.id) {
+            playHistory.push(currentPlayingTrack);
         }
-    });
-}
 
+        if (!fromQueue) lastManualLibraryIdx = idx;
+        playItem(track);
+    }
 
+    function playItem(item) {
+        // Ferma entrambi i player prima di iniziare
+        audio.pause();
+        if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
 
-    function toggleShuffle() {
-        isShuffle = !isShuffle;
-        if (isShuffle) {
-            shuffleOrder = Array.from(Array(playlist.length).keys());
-            for (let i = shuffleOrder.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [shuffleOrder[i], shuffleOrder[j]] = [shuffleOrder[j], shuffleOrder[i]];
+        currentPlayingTrack = item;
+
+        if (item.type === "youtube") {
+            if (ytPlayer && ytPlayer.loadVideoById) {
+                ytPlayer.loadVideoById(item.id);
+                nowPlayingTitle.textContent = item.title;
             }
-        }
-        if (navigator.vibrate) navigator.vibrate(30);
-        updateUI();
-    }
-
-function setupSwipe(el, idx) {
-    let sX = 0, sY = 0, cX = 0, isSwipe = false;
-    const threshold = 50;
-
-    el.ontouchstart = e => {
-        sX = e.touches[0].clientX;
-        sY = e.touches[0].clientY;
-        isSwipe = false; // Reset stato direzione
-        el.style.transition = 'none';
-    };
-
-    el.ontouchmove = e => {
-        let diffX = e.touches[0].clientX - sX;
-        let diffY = e.touches[0].clientY - sY;
-
-        // 1. Controllo Direzionale: attiva lo swipe solo se il movimento X è prevalente rispetto a Y
-        if (!isSwipe) {
-            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 10) {
-                isSwipe = true; // Blocca il movimento come "orizzontale"
-            } else if (Math.abs(diffY) > 10) {
-                return; // È uno scroll verticale, ignora lo swipe
-            }
-        }
-
-        if (isSwipe) {
-            e.preventDefault(); // Impedisce lo scroll della pagina mentre si swippa
-            cX = diffX * 0.5; // Resistenza per fluidità
-            el.style.transform = `translateX(${cX}px)`;
-
-            // 2. Feedback Colore (Gradazione verso Verde o Blu)
-            if (cX > 0) { // Swipe a destra -> Verde
-                let op = Math.min(Math.abs(cX) / 100, 0.4);
-                el.style.backgroundColor = `rgba(76, 175, 80, ${op})`;
-            } else { // Swipe a sinistra -> Blu
-                let op = Math.min(Math.abs(cX) / 100, 0.4);
-                el.style.backgroundColor = `rgba(33, 150, 243, ${op})`;
-            }
-        }
-    };
-
-    el.ontouchend = () => {
-        el.style.transition = '0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28)';
-        el.style.transform = 'translateX(0)';
-        el.style.backgroundColor = ''; // Reset colore
-
-        if (isSwipe) {
-            if (Math.abs(cX) > threshold) {
-                // 3. Vibrazione (Solo se supportata e azione confermata)
-                if (navigator.vibrate) navigator.vibrate(30); 
-                
-                if (cX > 0) addToQ(idx);
-                else addToQ(idx, true);
-            }
-        }
-        cX = 0;
-    };
-}
-
-
-    function addToQ(idx, top=true) {
-        top ? queue.unshift(playlist[idx]) : queue.push(playlist[idx]);
-        renderQueue();
-        showToast(top ? "In cima" : "In fondo");
-        if(navigator.vibrate) navigator.vibrate(30);
-    }
-
-    window.moveQ = (i, d) => { [queue[i], queue[i+d]] = [queue[i+d], queue[i]]; renderQueue(); };
-    window.remQ = (i) => { queue.splice(i, 1); renderQueue(); };
-    window.loadP = (n) => {
-        const all = JSON.parse(localStorage.getItem('f_p'));
-        all[n].forEach(s => {
-            if (s.yt) {
-    queue.push({
-        type: "youtube",
-        id: s.id,
-        title: s.title,
-        thumb: "https://img.youtube.com/vi/" + s.id + "/default.jpg"
-    });
-} else {
-    const m = playlist.find(x => x.file.name === s.n && x.folder === s.f);
-    if (m) queue.push(m);
-}
-        });
-        renderQueue(); showToast("Caricata!");
-    };
-    window.delP = (n) => {
-        if(confirm("Elimina?")) {
-            const all = JSON.parse(localStorage.getItem('f_p'));
-            delete all[n]; localStorage.setItem('f_p', JSON.stringify(all));
-            renderPlaylists();
-        }
-    };
-
-    function getDuration(f, i) {
-        const a = new Audio(); a.src = URL.createObjectURL(f);
-        a.onloadedmetadata = () => {
-            const m = Math.floor(a.duration/60), s = Math.floor(a.duration%60).toString().padStart(2,'0');
-            const el = document.getElementById(`dur-${i}`);
-            if(el) el.textContent = `${m}:${s}`;
-            URL.revokeObjectURL(a.src);
-        };
-    }
-
-    document.getElementById('save-playlist-btn').onclick = () => {
-        const n = prompt("Nome Playlist:", "Playlist " + new Date().toLocaleDateString());
-        if (!n || !queue.length) return;
-        const all = JSON.parse(localStorage.getItem('f_p') || '{}');
-        all[n] = queue.map(x => ({n: x.file.name, f: x.folder}));
-        localStorage.setItem('f_p', JSON.stringify(all));
-        renderPlaylists();
-    };
-
-    playBtn.onclick = () => audio.paused ? audio.play() : audio.pause();
-    document.getElementById('btn-shuffle').onclick = toggleShuffle;
-    document.getElementById('btn-loop').onclick = () => { isLooping = !isLooping; updateUI(); };
-    
-    document.getElementById('btn-next').onclick = () => {
-    if (queue.length > 0) {
-        const next = queue.shift();
-        renderQueue();
-        playItem(next);
-        return;
-    }
-
-    let nextIdx = lastManualLibraryIdx + 1;
-    if (isShuffle) nextIdx = Math.floor(Math.random() * playlist.length);
-    if (nextIdx < playlist.length) playTrack(nextIdx);
-};
-
-    document.getElementById('btn-prev').onclick = () => {
-    if (audio.currentTime > 3) return audio.currentTime = 0;
-
-    if (playHistory.length) {
-        const prev = playHistory.pop();
-        playTrack(prev, false, true);
-        return;
-    }
-
-    if (currentPlayingIdx > 0) playTrack(currentPlayingIdx - 1);
-};
-
-
-
-
-
-    audio.onplay = audio.onpause = updateUI;
-    audio.onended = () => isLooping ? (audio.currentTime = 0, audio.play()) : document.getElementById('btn-next').click();
-    audio.ontimeupdate = () => {
-        seekSlider.value = (audio.currentTime/audio.duration)*100 || 0;
-        timeCurrent.textContent = formatTime(audio.currentTime);
-        if(audio.duration) timeTotal.textContent = formatTime(audio.duration);
-    };
-    seekSlider.oninput = () => audio.currentTime = (seekSlider.value/100) * audio.duration;
-
-    document.getElementById('search-input').oninput = async (e) => {
-    const val = e.target.value.toLowerCase();
-
-    // Filtra libreria locale
-    document.querySelectorAll('.folder-group').forEach(g => {
-        let has = false;
-        g.querySelectorAll('.track-item').forEach(tr => {
-            const match = tr.textContent.toLowerCase().includes(val);
-            tr.style.display = match ? 'flex' : 'none';
-            if (match) has = true;
-        });
-        g.style.display = has ? 'block' : 'none';
-    });
-
-    // Cerca su YouTube
-    searchYouTube(val);
-};
-
-
-
-
-
-
-    function formatTime(s) {
-        const m = Math.floor(s/60), sec = Math.floor(s%60).toString().padStart(2,'0');
-        return isNaN(s) ? "0:00" : `${m}:${sec}`;
-    }
-
-function showToast(m) {
-    const t = document.createElement('div');
-    // Stile inline potenziato
-    t.style.cssText = `
-        position: fixed; 
-        top: 50%; 
-        left: 50%; 
-        transform: translate(-50%, -50%); 
-        background: rgba(0, 0, 0, 0.8); 
-        color: #fff;
-        padding: 12px 25px; 
-        border-radius: 30px; 
-        font-size: 0.9rem; 
-        font-weight: bold;
-        border: 1px solid var(--primary); 
-        z-index: 2000; /* Molto più alto del player (1000) e della barra (1100) */
-        pointer-events: none;
-        transition: opacity 0.3s ease;
-        text-align: center;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-    `;
-    t.textContent = m; 
-    document.body.appendChild(t);
-    
-    // Effetto dissolvenza e rimozione
-    setTimeout(() => {
-        t.style.opacity = '0';
-        setTimeout(() => t.remove(), 300);
-    }, 500);
-}
-
-
-
-// --- LOGICA PLAYER ESPANSO E GESTI ---
-let lastTap = 0;
-
-function setupExpandedSwipe() {
-    const el = document.getElementById('expanded-player');
-    const vContainer = document.getElementById('visual-container');
-    const closeBtn = document.querySelector('.close-indicator');
-    if (!el) return;
-
-    let sX = 0, sY = 0;
-    const threshold = 60;
-
-    // 1. Click sulla "V" per chiudere
-    closeBtn.onclick = (e) => {
-        e.stopPropagation();
-        togglePlayer(false);
-    };
-
-    // 2. Gestione TOCCO (Play/Pause e Double Tap)
-    vContainer.onclick = (e) => {
-        const now = Date.now();
-        const DOUBLE_TAP_DELAY = 300;
-        const rect = vContainer.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const width = rect.width;
-
-        if (now - lastTap < DOUBLE_TAP_DELAY) {
-            // DOPPIO TOCCO
-            if (x > (width * 2 / 3)) {
-                audio.currentTime = Math.min(audio.duration, audio.currentTime + 10);
-                showToast("+10s ⏩");
-            } else if (x < (width / 3)) {
-                audio.currentTime = Math.max(0, audio.currentTime - 5);
-                showToast("⏪ -5s");
-            }
-            lastTap = 0; 
         } else {
-            // TOCCO SINGOLO (con piccolo delay per distinguere dal doppio)
-            lastTap = now;
-            setTimeout(() => {
-                if (Date.now() - lastTap >= DOUBLE_TAP_DELAY && lastTap !== 0) {
-                    audio.paused ? audio.play() : audio.pause();
-                }
-            }, DOUBLE_TAP_DELAY);
-        }
-    };
-
-    // 3. Gestione SWIPE (Basso per chiudere, DX/SX per Next/Prev)
-    el.addEventListener('touchstart', e => {
-        sX = e.touches[0].clientX;
-        sY = e.touches[0].clientY;
-    }, {passive: true});
-
-    el.addEventListener('touchend', e => {
-        let dX = e.changedTouches[0].clientX - sX;
-        let dY = e.changedTouches[0].clientY - sY;
-
-        if (Math.abs(dY) > Math.abs(dX) && dY > threshold) {
-            togglePlayer(false);
-        } else if (Math.abs(dX) > Math.abs(dY)) {
-            if (dX > threshold) {
-                document.getElementById('btn-prev').click();
-            } else if (dX < -threshold) {
-                document.getElementById('btn-next').click();
+            // File locale (Audio o Video)
+            const url = URL.createObjectURL(item.file);
+            audio.src = url;
+            audio.play().catch(e => console.error("Errore Play:", e));
+            nowPlayingTitle.textContent = item.file.name.replace(/\.[^/.]+$/, "");
+            
+            // Media Session per controlli remoti (Android/iOS)
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: nowPlayingTitle.textContent,
+                    artist: item.folder.split('/').pop(),
+                    artwork: [{ src: item.cover || 'https://placehold.co', sizes: '512x512' }]
+                });
             }
         }
-    }, {passive: true});
-}
-
-// Funzione Universale per mostrare Video o Immagine
-function updateExpandedView(idx) {
-    const vContainer = document.getElementById('visual-container');
-    if (!vContainer || idx === -1) return;
-    
-    const track = playlist[idx];
-    vContainer.innerHTML = "";
-
-    if (track.file.type.startsWith("video/")) {
-        vContainer.appendChild(audio);
-        audio.style.display = "block";
-        audio.style.width = "100%";
-        audio.style.maxHeight = "100%";
-    } else {
-        const img = document.createElement('img');
-        img.src = track.cover || 'https://placehold.co';
-        img.style.width = "85%";
-        img.style.borderRadius = "15px";
-        vContainer.appendChild(img);
-        document.body.appendChild(audio);
-        audio.style.display = "none";
+        
+        updateUI();
+        updateExpandedView(item);
     }
-}
 
-// Funzione globale Apertura Player
-window.togglePlayer = (open) => {
-    const p = document.getElementById('expanded-player');
-    if (!p) return;
-    if (open && currentPlayingIdx !== -1) {
-        updateExpandedView(currentPlayingIdx);
-        p.classList.add('open');
-    } else {
-        p.classList.remove('open');
+    function renderYouTubeResults(items) {
+        const container = document.getElementById("youtube-results");
+        container.innerHTML = "";
+        items.forEach(item => {
+            const video = {
+                type: "youtube",
+                id: item.id.videoId,
+                title: item.snippet.title,
+                thumb: item.snippet.thumbnails.default.url
+            };
+            const el = document.createElement("div");
+            el.className = "track-item";
+            el.onclick = () => { queue.push(video); renderQueue(); showToast("In Coda"); };
+            el.innerHTML = `
+                <div class="track-cover"><img src="${video.thumb}"></div>
+                <div class="track-info">
+                    <span class="track-name">${video.title}</span>
+                    <div class="track-meta-row"><span>YouTube</span><span class="file-format">YT</span></div>
+                </div>`;
+            container.appendChild(el);
+        });
     }
-};
-
-// Inizializzazione finale
-document.getElementById('now-playing-title').onclick = () => togglePlayer(true);
-window.onload = () => { 
-    updateUI(); 
-    renderPlaylists(); 
-    setupExpandedSwipe(); 
-};
-
-
-    window.onload = () => { updateUI(); renderPlaylists(); setupExpandedSwipe(); };
 </script>
 
 
 
+    <script>
+    // --- 8. GESTIONE CODA E PLAYLIST ---
+    function renderQueue() {
+        queueListEl.innerHTML = "";
+        document.getElementById('queue-section').style.display = queue.length ? 'block' : 'none';
+
+        queue.forEach((t, i) => {
+            const item = document.createElement('div');
+            let title = (t.type === "youtube") ? t.title : t.file.name.replace(/\.[^/.]+$/, "");
+
+            item.innerHTML = `
+                <div style="flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:0.85rem;">
+                    ${title}
+                </div>
+                <div style="display:flex; gap:12px; margin-left:10px; align-items:center;">
+                    <div onclick="moveQ(${i},-1)">${i > 0 ? DRAW.up : ''}</div>
+                    <div onclick="moveQ(${i},1)">${i < queue.length-1 ? DRAW.down : ''}</div>
+                    <div onclick="remQ(${i})">${DRAW.x}</div>
+                </div>`;
+            queueListEl.appendChild(item);
+        });
+    }
+
+    window.moveQ = (i, d) => { [queue[i], queue[i+d]] = [queue[i+d], queue[i]]; renderQueue(); };
+    window.remQ = (i) => { queue.splice(i, 1); renderQueue(); };
+
+    // --- 9. CONTROLLI DI NAVIGAZIONE ---
+    document.getElementById('btn-next').onclick = () => {
+        if (queue.length > 0) {
+            const next = queue.shift();
+            renderQueue();
+            playItem(next);
+            return;
+        }
+
+        let nextIdx = lastManualLibraryIdx + 1;
+        if (isShuffle && playlist.length > 0) {
+            nextIdx = Math.floor(Math.random() * playlist.length);
+        }
+        
+        if (nextIdx < playlist.length) {
+            playTrack(nextIdx);
+        } else {
+            showToast("Fine della libreria");
+        }
+    };
+
+    document.getElementById('btn-prev').onclick = () => {
+        if (audio.currentTime > 3) {
+            audio.currentTime = 0;
+            return;
+        }
+
+        if (playHistory.length) {
+            const prevTrack = playHistory.pop();
+            playItem(prevTrack);
+            return;
+        }
+
+        if (lastManualLibraryIdx > 0) {
+            playTrack(lastManualLibraryIdx - 1);
+        }
+    };
+
+    function toggleShuffle() {
+        isShuffle = !isShuffle;
+        if (navigator.vibrate) navigator.vibrate(30);
+        updateUI();
+        showToast(isShuffle ? "Shuffle ON" : "Shuffle OFF");
+    }
+</script>
+
+
+
+    <script>
+    // --- 10. AGGIORNAMENTO INTERFACCIA (UI) ---
+    function updateUI() {
+        // Aggiorna icone bottoni principali
+        playBtn.innerHTML = (audio.paused && (!ytPlayer || ytPlayer.getPlayerState() !== 1)) ? DRAW.play : DRAW.pause;
+        document.getElementById('btn-next').innerHTML = DRAW.next;
+        document.getElementById('btn-prev').innerHTML = DRAW.prev;
+        document.getElementById('btn-loop').innerHTML = DRAW.loop(isLooping);
+        document.getElementById('btn-shuffle').innerHTML = DRAW.shuffle(isShuffle);
+
+        // Evidenziazione brani nella lista
+        document.querySelectorAll('.track-item').forEach((el, i) => {
+            el.classList.remove('playing', 'last-pos');
+            if (currentPlayingTrack && currentPlayingTrack.id === i && currentPlayingTrack.type === "local") {
+                el.classList.add('playing');
+            } else if (i === lastManualLibraryIdx) {
+                el.classList.add('last-pos');
+            }
+        });
+    }
+
+    function formatTime(s) {
+        if (isNaN(s)) return "0:00";
+        const m = Math.floor(s/60), sec = Math.floor(s%60).toString().padStart(2,'0');
+        return `${m}:${sec}`;
+    }
+
+    // --- 11. GESTIONE PLAYER ESPANSO ---
+    function updateExpandedView(track) {
+        const vContainer = document.getElementById('visual-container');
+        if (!vContainer) return;
+        vContainer.innerHTML = "";
+
+        if (track.type === "youtube") {
+            // Per YouTube mostriamo l'iframe (già esistente nel DOM)
+            const ytEl = document.getElementById('yt-player');
+            ytEl.style.display = "block";
+            ytEl.style.width = "100%";
+            ytEl.style.height = "300px";
+            vContainer.appendChild(ytEl);
+        } else if (track.file.type.startsWith("video/")) {
+            // Per Video Locali spostiamo il tag audio/video qui
+            audio.style.display = "block";
+            audio.style.width = "100%";
+            audio.style.maxHeight = "80vh";
+            vContainer.appendChild(audio);
+        } else {
+            // Per Audio Locali mostriamo la copertina
+            const img = document.createElement('img');
+            img.src = track.cover || 'https://placehold.co';
+            img.style.cssText = "width:85%; border-radius:15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);";
+            vContainer.appendChild(img);
+            // Nascondiamo il video ma lo lasciamo nel body per continuare l'audio
+            audio.style.display = "none";
+            document.body.appendChild(audio);
+        }
+    }
+
+    // --- 12. LOGICA SWIPE LISTA ---
+    function setupSwipe(el, idx) {
+        let sX = 0, cX = 0, isSwipe = false;
+        el.ontouchstart = e => { sX = e.touches[0].clientX; isSwipe = false; el.style.transition = 'none'; };
+        el.ontouchmove = e => {
+            let diffX = e.touches[0].clientX - sX;
+            if (Math.abs(diffX) > 10) {
+                isSwipe = true;
+                cX = diffX * 0.5;
+                el.style.transform = `translateX(${cX}px)`;
+                el.style.backgroundColor = cX > 0 ? `rgba(29, 185, 84, ${Math.min(Math.abs(cX)/100, 0.3)})` : `rgba(33, 150, 243, ${Math.min(Math.abs(cX)/100, 0.3)})`;
+            }
+        };
+        el.ontouchend = () => {
+            el.style.transition = '0.3s ease'; el.style.transform = 'translateX(0)'; el.style.backgroundColor = '';
+            if (isSwipe && Math.abs(cX) > 50) {
+                if (navigator.vibrate) navigator.vibrate(30);
+                cX > 0 ? (queue.unshift(playlist[idx]), showToast("In cima")) : (queue.push(playlist[idx]), showToast("In fondo"));
+                renderQueue();
+            }
+        };
+    }
+</script>
+
+
+
+
+<script>
+    // --- 13. CONTROLLI TOUCH PLAYER ESPANSO ---
+    let lastTap = 0;
+    function setupExpandedSwipe() {
+        const el = document.getElementById('expanded-player');
+        const vContainer = document.getElementById('visual-container');
+        const closeBtn = document.querySelector('.close-indicator');
+        if (!el || !vContainer) return;
+
+        closeBtn.onclick = (e) => { e.stopPropagation(); togglePlayer(false); };
+
+        vContainer.onclick = (e) => {
+            const now = Date.now();
+            const rect = vContainer.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            if (now - lastTap < 300) {
+                if (x > (rect.width * 2 / 3)) { audio.currentTime += 10; showToast("+10s ⏩"); }
+                else if (x < (rect.width / 3)) { audio.currentTime -= 5; showToast("⏪ -5s"); }
+                lastTap = 0;
+            } else {
+                lastTap = now;
+                setTimeout(() => { if (Date.now() - lastTap >= 300 && lastTap !== 0) audio.paused ? audio.play() : audio.pause(); }, 300);
+            }
+        };
+    }
+
+    // --- 14. RICERCA E TOAST ---
+    document.getElementById('search-input').oninput = (e) => {
+        const val = e.target.value.toLowerCase();
+        document.querySelectorAll('.folder-group').forEach(g => {
+            let has = false;
+            g.querySelectorAll('.track-item').forEach(tr => {
+                const match = tr.textContent.toLowerCase().includes(val);
+                tr.style.display = match ? 'flex' : 'none';
+                if (match) has = true;
+            });
+            g.style.display = has ? 'block' : 'none';
+        });
+        if (val.length > 2) searchYouTube(val);
+    };
+
+    function showToast(m) {
+        const t = document.createElement('div');
+        t.style.cssText = `position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.85); color:#fff; padding:12px 25px; border-radius:30px; font-weight:bold; z-index:9999; border:1px solid var(--primary); transition:opacity 0.3s;`;
+        t.textContent = m; document.body.appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 800);
+    }
+
+    // --- 15. SINCRONIZZAZIONE AUDIO E INIT ---
+    audio.onplay = audio.onpause = updateUI;
+    audio.onended = () => isLooping ? (audio.currentTime = 0, audio.play()) : document.getElementById('btn-next').click();
+    audio.ontimeupdate = () => {
+        seekSlider.value = (audio.currentTime / audio.duration) * 100 || 0;
+        timeCurrent.textContent = formatTime(audio.currentTime);
+        if (audio.duration) timeTotal.textContent = formatTime(audio.duration);
+    };
+    seekSlider.oninput = () => { if (audio.duration) audio.currentTime = (seekSlider.value / 100) * audio.duration; };
+
+    window.togglePlayer = (open) => {
+        const p = document.getElementById('expanded-player');
+        if (open && currentPlayingTrack) { p.classList.add('open'); updateExpandedView(currentPlayingTrack); }
+        else { p.classList.remove('open'); }
+    };
+
+    document.getElementById('now-playing-title').onclick = () => togglePlayer(true);
+    document.getElementById('btn-shuffle').onclick = toggleShuffle;
+    document.getElementById('btn-loop').onclick = () => { isLooping = !isLooping; updateUI(); showToast(isLooping ? "Loop ON" : "Loop OFF"); };
+    playBtn.onclick = () => audio.paused ? audio.play() : audio.pause();
+
+    window.onload = () => { updateUI(); setupExpandedSwipe(); };
+</script>
 </body>
 </html>
+
+
+    
+
+
+    
+    
