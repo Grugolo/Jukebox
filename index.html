@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grugofy Player</title>
+
+    <!-- Foglio di stile esterno -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- YouTube API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+</head>
+
+<body>
+
+<header>
+    <label class="custom-file-upload">
+        <input id="folderInput" type="file" webkitdirectory multiple accept="audio/*, video/*">
+        CARICA
+    </label>
+
+    <input type="text" id="search-input" placeholder="Cerca brano...">
+</header>
+
+<main id="content">
+
+    <!-- CODA -->
+    <div id="queue-section" style="display:none;">
+        <div class="section-header">
+            <div class="section-title">In Coda</div>
+            <button id="save-playlist-btn" class="small-btn">SALVA CODA</button>
+        </div>
+        <div id="queue-list"></div>
+    </div>
+
+    <!-- PLAYLIST SALVATE -->
+    <div id="playlist-manager">
+        <div class="section-header">
+            <div class="section-title">Playlist Salvate</div>
+            <button id="save-history-btn" class="small-btn">SALVA CRONOLOGIA</button>
+        </div>
+        <div id="saved-playlists-list"></div>
+    </div>
+
+    <!-- RISULTATI YOUTUBE -->
+    <div class="section-title">YouTube</div>
+    <div id="youtube-results"></div>
+
+    <!-- LIBRERIA LOCALE -->
+    <div class="section-title">Libreria</div>
+    <div id="library"></div>
+
+</main>
+
+<!-- PLAYER INFERIORE -->
+<div id="player-bar">
+
+    <div id="now-playing-title" class="now-playing">Seleziona un brano</div>
+
+    <div class="progress-container">
+        <span class="time-label" id="time-current">0:00</span>
+        <input type="range" id="seek-slider" value="0" max="100">
+        <span class="time-label" id="time-total">0:00</span>
+    </div>
+
+    <div class="controls">
+        <div class="ctrl-btn" id="btn-shuffle"></div>
+        <div class="ctrl-btn" id="btn-prev"></div>
+        <div class="ctrl-btn btn-main" id="btn-play"></div>
+        <div class="ctrl-btn" id="btn-next"></div>
+        <div class="ctrl-btn" id="btn-loop"></div>
+    </div>
+</div>
+
+<!-- AUDIO PRINCIPALE -->
+<video id="main-audio" style="display:none;"></video>
+
+<!-- PLAYER YOUTUBE INVISIBILE -->
+<div id="yt-player" style="display:none;"></div>
+
+<!-- PLAYER ESPANSO -->
+<div id="expanded-player">
+    <div class="close-indicator">
+        <div class="close-line left"></div>
+        <div class="close-line right"></div>
+    </div>
+
+    <div id="visual-container"></div>
+</div>
+
+<!-- SCRIPT PRINCIPALE -->
+<script src="script.js"></script>
+
+</body>
+</html>
