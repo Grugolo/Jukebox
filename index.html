@@ -1,158 +1,38 @@
 <!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jukebox</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white; margin: 0; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 90%; max-width: 1000px; padding: 20px; display: grid; grid-template-columns: 1fr 350px; gap: 20px; }
-        .search-section { grid-column: 1 / -1; background: #1e1e1e; padding: 15px; border-radius: 8px; display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border-radius: 4px; border: none; font-size: 16px; }
-        button { padding: 10px 20px; background: #ff0000; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        #player-container { background: #000; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; }
-        .sidebar { background: #1e1e1e; padding: 15px; border-radius: 8px; height: fit-content; }
-        h3 { margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        .queue-item, .result-item { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 8px; background: #2a2a2a; border-radius: 4px; font-size: 14px; cursor: pointer; }
-        .queue-item:hover, .result-item:hover { background: #383838; }
-        .result-item img, .queue-item img { width: 80px; border-radius: 4px; }
-        .controls { margin-top: 10px; display: flex; justify-content: space-between; }
-    </style>
-</head>
+<html>
 <body>
+    <button onclick="testAPI()">TESTA API YOUTUBE</button>
+    <pre id="log" style="background: #eee; padding: 20px; margin-top: 20px;">I risultati appariranno qui...</pre>
 
-<div class="container">
-    <div class="search-section">
-        <input type="text" id="query" placeholder="Cerca una canzone o un video...">
-        <button onclick="cercaVideo()">Cerca</button>
-    </div>
+    <script>
+        async function testAPI() {
+            const API_KEY = 'METTI_LA_TUA_CHIAVE_QUI'; // <--- TUA CHIAVE QUI
+            const logElement = document.getElementById('log');
+            
+            // URL ultra-semplice per cercare "Danza Kuduro"
+            const url = "https://www.googleapis.com" + API_KEY;
 
-    <div class="main-content">
-        <div id="player-container">
-            <div id="player"></div>
-        </div>
-        <div id="results" style="margin-top:20px;">
-            <h3>Risultati Ricerca</h3>
-            <!-- Risultati della ricerca appariranno qui -->
-        </div>
-    </div>
+            logElement.innerText = "Chiamata in corso...";
 
-    <div class="sidebar">
-        <h3>Coda di Riproduzione</h3>
-        <div id="queue-list">
-            <!-- La tua playlist di sessione -->
-        </div>
-        <div class="controls">
-            <button onclick="playNext()" style="background: #444; width: 100%;">Salta Prossimo</button>
-        </div>
-    </div>
-</div>
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
 
-<script>
-    const API_KEY = `AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0`; // Incolla qui la tua API Key
-    let queue = [];
-    let player;
-
-    // 1. Carica le IFrame API
-    var tag = document.createElement('script');
-    tag.src = "https://www.youtube.com/iframe_api/";
-    var firstScriptTag = document.getElementsByTagName('script')[0];
-    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-    function onYouTubeIframeAPIReady() {
-        player = new YT.Player('player', {
-            height: '100%',
-            width: '100%',
-            videoId: '', // Inizia vuoto
-            playerVars: { 'playsinline': 1 },
-            events: { 'onStateChange': onPlayerStateChange }
-        });
-    }
-
-    // 2. Cerca Video tramite API
-    async function cercaVideo() {
-        const q = document.getElementById('query').value;
-        if (!q) return;
-        
-const url = 'https://www.googleapis.com/' + 'youtube/v3/search?part=snippet&maxResults=5&q=danza+kuduro' + '&type=video&key=' + API_KEY
-        try {
-            const res = await fetch(url);
-            const data = await res.json();
-            mostraRisultati(data.items);
-        } catch (err) {
-            console.error("Errore ricerca:", err);
-            alert("Errore durante la ricerca. Controlla la tua API Key.");
+                if (data.error) {
+                    // Se Google risponde con un errore (es. chiave non abilitata)
+                    logElement.style.color = "red";
+                    logElement.innerText = "ERRORE GOOGLE:\n" + JSON.stringify(data.error, null, 2);
+                } else if (data.items) {
+                    // Se la chiave funziona e restituisce video
+                    logElement.style.color = "green";
+                    logElement.innerText = "SUCCESSO! Trovati " + data.items.length + " video.\n\nEsempio primo titolo: " + data.items[0].snippet.title;
+                }
+            } catch (err) {
+                // Se il browser blocca la chiamata (es. sei in locale senza HTTPS)
+                logElement.style.color = "orange";
+                logElement.innerText = "ERRORE BROWSER (FETCH FAILED):\n" + err.message + "\n\nProbabile blocco CORS o mancanza di HTTPS.";
+            }
         }
-    }
-
-    function mostraRisultati(items) {
-        const container = document.getElementById('results');
-        container.innerHTML = '<h3>Risultati Ricerca</h3>';
-        items.forEach(item => {
-            const div = document.createElement('div');
-            div.className = 'result-item';
-            div.innerHTML = `
-                <img src="${item.snippet.thumbnails.default.url}">
-                <span>${item.snippet.title}</span>
-            `;
-            div.onclick = () => aggiungiACoda(item.id.videoId, item.snippet.title, item.snippet.thumbnails.default.url);
-            container.appendChild(div);
-        });
-    }
-
-    // 3. Gestione Coda
-    function aggiungiACoda(id, titolo, thumb) {
-        queue.push({ id, titolo, thumb });
-        aggiornaInterfacciaCoda();
-        
-        // Se non sta riproducendo nulla, avvia il primo
-        if (player.getPlayerState() !== 1 && queue.length === 1) {
-            playVideo(id);
-        }
-    }
-
-    function aggiornaInterfacciaCoda() {
-        const list = document.getElementById('queue-list');
-        list.innerHTML = '';
-        queue.forEach((item, index) => {
-            const div = document.createElement('div');
-            div.className = 'queue-item';
-            div.innerHTML = `
-                <img src="${item.thumb}">
-                <div>
-                    <strong>#${index + 1}</strong><br>
-                    ${item.titolo}
-                </div>
-            `;
-            div.onclick = () => {
-                // Rimuovi o sposta volendo, qui lo facciamo solo riprodurre
-                playVideo(item.id);
-                queue.splice(index, 1);
-                aggiornaInterfacciaCoda();
-            };
-            list.appendChild(div);
-        });
-    }
-
-    function playVideo(id) {
-        player.loadVideoById(id);
-    }
-
-    // 4. Passaggio automatico al prossimo video
-    function onPlayerStateChange(event) {
-        if (event.data === YT.PlayerState.ENDED) {
-            playNext();
-        }
-    }
-
-    function playNext() {
-        if (queue.length > 0) {
-            const next = queue.shift();
-            playVideo(next.id);
-            aggiornaInterfacciaCoda();
-        }
-    }
-</script>
-
+    </script>
 </body>
 </html>
