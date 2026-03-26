@@ -323,46 +323,100 @@
         playBtn.innerHTML = (e.data === YT.PlayerState.PLAYING) ? DRAW.pause : DRAW.play;
     }
 
+    const PIPED_INSTANCES = [
+        'https://pipedapi.kavin.rocks',
+        'https://api.piped.projectsegfau.lt',
+        'https://piped-api.garudalinux.org'
+    ];
+    window.ytResults = [];
+
     async function searchYouTube(q) {
         const container = document.getElementById("youtube-results");
-        if (!q) { container.innerHTML = ""; return; }
-
-        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=10&key=AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0`;
-
-        try {
-            const res = await fetch(url);
-            const data = await res.json();
-            if (!data.items) return;
-            renderYouTubeResults(data.items);
-        } catch (err) {
-            console.error("Errore YouTube:", err);
+        if (!q || q.length < 2) { container.innerHTML = ""; return; }
+        container.innerHTML = `<div style="color:var(--text-dim);font-size:0.8rem;padding:10px;">Ricerca...</div>`;
+        for (const base of PIPED_INSTANCES) {
+            try {
+                const res = await fetch(`${base}/search?q=${encodeURIComponent(q)}&filter=music_songs`, {signal: AbortSignal.timeout(5000)});
+                if (!res.ok) continue;
+                const data = await res.json();
+                const items = (data.items || []).filter(i => i.type === 'stream').slice(0, 3);
+                if (!items.length) { container.innerHTML = `<div style="color:var(--text-dim);font-size:0.8rem;padding:10px;">Nessun risultato</div>`; return; }
+                renderYouTubeResults(items);
+                return;
+            } catch (e) { /* prova istanza successiva */ }
         }
+        container.innerHTML = `<div style="color:#ff4444;font-size:0.8rem;padding:10px;">Errore connessione YouTube</div>`;
     }
 
     function renderYouTubeResults(items) {
         const container = document.getElementById("youtube-results");
         container.innerHTML = "";
-        items.forEach(item => {
-            const video = {
-                type: "youtube",
-                id: item.id.videoId,
-                title: item.snippet.title,
-                thumb: item.snippet.thumbnails.default.url
-            };
+        window.ytResults = items.map(item => ({
+            type: "youtube",
+            id: item.url.replace('/watch?v=', ''),
+            title: item.title,
+            thumb: item.thumbnail,
+            duration: item.duration || 0,
+            uploader: item.uploaderName || 'YouTube'
+        }));
+        window.ytResults.forEach((video, i) => {
             const el = document.createElement("div");
             el.className = "track-item";
-            el.onclick = () => addToQueueYouTube(video);
+            const mins = Math.floor(video.duration / 60);
+            const secs = String(video.duration % 60).padStart(2, '0');
+            const durStr = video.duration ? `${mins}:${secs}` : '';
+            const n = window.ytResults.length;
+            el.style.background = '#1a1a1a';
+            el.style.borderBottom = i < n - 1 ? '1px solid #2a2a2a' : 'none';
+            el.style.marginBottom = i === n - 1 ? '15px' : '0';
+            if (n === 1) el.style.borderRadius = '15px';
+            else if (i === 0) el.style.borderRadius = '15px 15px 0 0';
+            else if (i === n - 1) el.style.borderRadius = '0 0 15px 15px';
             el.innerHTML = `
-                <div class="track-cover"><img src="${video.thumb}"></div>
-                <div class="track-info">
+                <div class="track-cover"><img src="${video.thumb}" onerror="this.parentElement.textContent='▶️'"></div>
+                <div class="track-info" onclick="playItem(window.ytResults[${i}])">
                     <span class="track-name">${video.title}</span>
                     <div class="track-meta-row">
-                        <span>YouTube</span>
+                        <span>${video.uploader}</span>
                         <span class="file-format">YT</span>
+                        ${durStr ? `<span style="color:var(--primary);font-weight:bold;">${durStr}</span>` : ''}
                     </div>
                 </div>`;
+            setupYTSwipe(el, i);
             container.appendChild(el);
         });
+    }
+
+    function setupYTSwipe(el, idx) {
+        let sX = 0, sY = 0, cX = 0, isSwipe = false;
+        const threshold = 50;
+        el.ontouchstart = e => { sX = e.touches[0].clientX; sY = e.touches[0].clientY; isSwipe = false; el.style.transition = 'none'; };
+        el.ontouchmove = e => {
+            let dX = e.touches[0].clientX - sX, dY = e.touches[0].clientY - sY;
+            if (!isSwipe) {
+                if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 10) isSwipe = true;
+                else if (Math.abs(dY) > 10) return;
+            }
+            if (isSwipe) {
+                e.preventDefault();
+                cX = dX * 0.5;
+                el.style.transform = `translateX(${cX}px)`;
+                el.style.backgroundColor = cX > 0 ? `rgba(76,175,80,${Math.min(Math.abs(cX)/100,0.4)})` : `rgba(33,150,243,${Math.min(Math.abs(cX)/100,0.4)})`;
+            }
+        };
+        el.ontouchend = () => {
+            el.style.transition = '0.4s cubic-bezier(0.18,0.89,0.32,1.28)';
+            el.style.transform = 'translateX(0)';
+            el.style.backgroundColor = '';
+            if (isSwipe && Math.abs(cX) > threshold) {
+                if (navigator.vibrate) navigator.vibrate(30);
+                const video = window.ytResults[idx];
+                if (cX > 0) { queue.unshift(video); showToast("In cima ↑"); }
+                else { queue.push(video); showToast("In fondo ↓"); }
+                renderQueue();
+            }
+            cX = 0;
+        };
     }
 
     function addToQueueYouTube(video) {
@@ -709,7 +763,9 @@
         const n = prompt("Nome Playlist:", "Playlist " + new Date().toLocaleDateString());
         if (!n || !queue.length) return;
         const all = JSON.parse(localStorage.getItem('f_p') || '{}');
-        all[n] = queue.map(x => ({ n: x.file ? x.file.name : x.title, f: x.folder || '' }));
+        all[n] = queue.map(x => x.type === 'youtube' 
+            ? { yt: true, id: x.id, title: x.title, thumb: x.thumb }
+            : { n: x.file.name, f: x.folder });
         localStorage.setItem('f_p', JSON.stringify(all));
         renderPlaylists();
     };
@@ -757,6 +813,7 @@
     };
     seekSlider.oninput = () => audio.currentTime = (seekSlider.value / 100) * audio.duration;
 
+    let searchDebounce = null;
     document.getElementById('search-input').oninput = async (e) => {
         const val = e.target.value.toLowerCase();
         document.querySelectorAll('.folder-group').forEach(g => {
@@ -768,7 +825,8 @@
             });
             g.style.display = has ? 'block' : 'none';
         });
-        searchYouTube(val);
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => searchYouTube(val), 500);
     };
 
     function formatTime(s) {
