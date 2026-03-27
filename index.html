@@ -358,10 +358,18 @@
     }
 
     function onYTStateChange(e) {
-        if (e.data === YT.PlayerState.ENDED) {
-            document.getElementById('btn-next').click();
-        }
-        playBtn.innerHTML = (e.data === YT.PlayerState.PLAYING) ? DRAW.pause : DRAW.play;
+    if (e.data === YT.PlayerState.ENDED) {
+        stopYTProgress();
+        document.getElementById('btn-next').click();
+    }
+
+    if (e.data === YT.PlayerState.PLAYING) {
+        startYTProgress();
+    } else {
+        stopYTProgress();
+    }
+
+    playBtn.innerHTML = (e.data === YT.PlayerState.PLAYING) ? DRAW.pause : DRAW.play;
     }
 
     // ─── YOUTUBE DATA API v3 ──────────────────────────────────────────────────
@@ -539,7 +547,9 @@ const searchData = await searchRes.json();
     }
 
     // ─── PLAY ITEM (locale o YT) ──────────────────────────────────────────────
+    let currentItem = null;
     function playItem(item) {
+    currentItem = item;
         if (item.type === 'youtube') {
             audio.pause();
             currentYTId = item.id;
@@ -557,6 +567,10 @@ const searchData = await searchRes.json();
                     el.style.background = '#1a1a1a';
                 }
             });
+
+            if (currentItem && currentItem !== item) {
+    playHistory.push(currentItem);
+            }
 
             if (ytReady && ytPlayer) {
                 ytPlayer.loadVideoById(item.id);
@@ -576,6 +590,7 @@ const searchData = await searchRes.json();
             }
 
             updateUI();
+            startYTProgressSync();
             return;
         }
 
@@ -584,6 +599,62 @@ const searchData = await searchRes.json();
         const idx = playlist.indexOf(item);
         playTrack(idx);
     }
+
+
+
+    let ytProgressInterval = null;
+
+function startYTProgress() {
+    stopYTProgress();
+
+    ytProgressInterval = setInterval(() => {
+        if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+
+        const current = ytPlayer.getCurrentTime();
+        const duration = ytPlayer.getDuration();
+
+        if (duration) {
+            seekSlider.value = (current / duration) * 100;
+            timeCurrent.textContent = formatTime(current);
+            timeTotal.textContent = formatTime(duration);
+        }
+    }, 500);
+}
+
+function stopYTProgress() {
+    if (ytProgressInterval) {
+        clearInterval(ytProgressInterval);
+        ytProgressInterval = null;
+    }
+}
+
+        let ytProgressInterval = null;
+
+function startYTProgressSync() {
+    stopYTProgressSync();
+
+    ytProgressInterval = setInterval(() => {
+        if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+
+        const current = ytPlayer.getCurrentTime();
+        const duration = ytPlayer.getDuration();
+
+        if (!duration) return;
+
+        seekSlider.value = (current / duration) * 100;
+        timeCurrent.textContent = formatTime(current);
+        timeTotal.textContent = formatTime(duration);
+    }, 500);
+}
+
+function stopYTProgressSync() {
+    if (ytProgressInterval) {
+        clearInterval(ytProgressInterval);
+        ytProgressInterval = null;
+    }
+}
+
+    
 
     // ─── DRAW ─────────────────────────────────────────────────────────────────
     const DRAW = {
@@ -705,6 +776,7 @@ const searchData = await searchRes.json();
         nowPlayingTitle.textContent = track.file.name.replace(/\.[^/.]+$/, '');
         updateUI();
         updateExpandedView(idx);
+        stopYTProgressSync();
 
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
@@ -858,8 +930,15 @@ const searchData = await searchRes.json();
         timeCurrent.textContent = formatTime(audio.currentTime);
         if (audio.duration) timeTotal.textContent = formatTime(audio.duration);
     };
-    seekSlider.oninput = () => audio.currentTime = (seekSlider.value / 100) * audio.duration;
-
+seekSlider.oninput = () => {
+    if (currentYTId && ytPlayer) {
+        const duration = ytPlayer.getDuration();
+        ytPlayer.seekTo((seekSlider.value / 100) * duration, true);
+    } else {
+        audio.currentTime = (seekSlider.value / 100) * audio.duration;
+    }
+};
+    
     // ─── SEARCH ───────────────────────────────────────────────────────────────
     document.getElementById('search-input').oninput = (e) => {
         const val = e.target.value.toLowerCase();
@@ -1002,11 +1081,22 @@ const searchData = await searchRes.json();
         }, {passive:true});
     }
 
-    function updateExpandedView(idx) {
-        const vContainer = document.getElementById('visual-container');
-        if (!vContainer || idx === -1) return;
-        const track = playlist[idx];
-        vContainer.innerHTML = '';
+function updateExpandedView(idx) {
+    const vContainer = document.getElementById('visual-container');
+    if (!vContainer) return;
+
+    vContainer.innerHTML = '';
+
+    // 👉 CASO YOUTUBE
+    if (currentYTId && ytPlayer) {
+        const iframe = ytPlayer.getIframe();
+        iframe.style.width = '100%';
+        iframe.style.height = '60vh';
+        iframe.style.borderRadius = '12px';
+
+        vContainer.appendChild(iframe);
+        return;
+        
         if (track.file.type.startsWith('video/')) {
             vContainer.appendChild(audio);
             audio.style.display='block'; audio.style.width='100%'; audio.style.maxHeight='100%';
@@ -1021,13 +1111,20 @@ const searchData = await searchRes.json();
     }
 
     window.togglePlayer = (open) => {
-        const p = document.getElementById('expanded-player');
-        if (!p) return;
-        if (open && currentPlayingIdx !== -1) { updateExpandedView(currentPlayingIdx); p.classList.add('open'); }
-        else p.classList.remove('open');
-    };
+    const p = document.getElementById('expanded-player');
+    if (!p) return;
 
-    document.getElementById('now-playing-title').onclick = () => togglePlayer(true);
+    if (open) {
+        updateExpandedView(currentPlayingIdx);
+        p.classList.add('open');
+    } else {
+        p.classList.remove('open');
+    }
+};
+
+   document.getElementById('now-playing-title').onclick = () => {
+    togglePlayer(true);
+};
     window.onload = () => { updateUI(); renderPlaylists(); setupExpandedSwipe(); };
 </script>
 </body>
