@@ -400,9 +400,23 @@
         try {
             // 1) Search: recupera id e snippet
             const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=3&key=${YT_API_KEY}`;
-            const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(8000) });
-            if (!searchRes.ok) throw new Error(`Search API error ${searchRes.status}`);
-            const searchData = await searchRes.json();
+            const searchRes await
+
+fetch(searchUrl);
+
+const text = await
+
+searchRes.text();
+
+console.log("RAW RESPONSE:",
+
+text);
+
+if (!searchRes.ok) {
+
+throw new Error(text); }
+
+const searchData = JSON.parse(text);
 
             const items = searchData.items || [];
             if (!items.length) {
