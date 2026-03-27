@@ -400,10 +400,7 @@
         try {
             // 1) Search: recupera id e snippet
             const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=3&key=${YT_API_KEY}`;
-            const searchRes await
-
-fetch(searchUrl);
-
+const searchRes = await fetch(searchUrl);
 const text = await searchRes.text();
 console.log("RAW RESPONSE:",text);
 if (!searchRes.ok) {
