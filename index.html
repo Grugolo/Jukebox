@@ -404,18 +404,10 @@
 
 fetch(searchUrl);
 
-const text = await
-
-searchRes.text();
-
-console.log("RAW RESPONSE:",
-
-text);
-
+const text = await searchRes.text();
+console.log("RAW RESPONSE:",text);
 if (!searchRes.ok) {
-
 throw new Error(text); }
-
 const searchData = JSON.parse(text);
 
             const items = searchData.items || [];
