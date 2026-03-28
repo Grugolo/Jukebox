@@ -1,29 +1,85 @@
 // ─── EXPANDED PLAYER ─────────────────────────────────────────────────────────
-import { state }     from './state.js';
-import { showToast } from './utils.js';
+import { state }      from './state.js';
+import { showToast, formatTime } from './utils.js';
 
 const audio = document.getElementById('main-audio');
 let lastTap = 0;
+
+// ─── Seekbar polling per YT ───────────────────────────────────────────────────
+let ytSeekInterval = null;
+
+export function startYTSeekPolling() {
+    stopYTSeekPolling();
+    const seekSlider  = document.getElementById('seek-slider');
+    const timeCurrent = document.getElementById('time-current');
+    const timeTotal   = document.getElementById('time-total');
+
+    ytSeekInterval = setInterval(() => {
+        if (!state.ytPlayer || !state.currentYTId) { stopYTSeekPolling(); return; }
+        try {
+            const cur = state.ytPlayer.getCurrentTime() || 0;
+            const dur = state.ytPlayer.getDuration()    || 0;
+            if (dur > 0) {
+                seekSlider.value      = (cur / dur) * 100;
+                timeCurrent.textContent = formatTime(cur);
+                timeTotal.textContent   = formatTime(dur);
+            }
+        } catch (_) {}
+    }, 500);
+}
+
+export function stopYTSeekPolling() {
+    clearInterval(ytSeekInterval);
+    ytSeekInterval = null;
+}
 
 /** Apre o chiude il player espanso */
 export function togglePlayer(open) {
     const p = document.getElementById('expanded-player');
     if (!p) return;
-    if (open && state.currentPlayingIdx !== -1) {
-        updateExpandedView(state.currentPlayingIdx);
+    // Apri se c'è qualcosa in riproduzione: YT oppure traccia locale
+    const hasYT    = !!state.currentYTId;
+    const hasLocal = state.currentPlayingIdx !== -1;
+    if (open && (hasYT || hasLocal)) {
+        updateExpandedView();
         p.classList.add('open');
     } else {
         p.classList.remove('open');
+        // Se YT è attivo, rimetti l'iframe al suo posto originale nascosto
+        if (hasYT) {
+            const ytEl = document.getElementById('yt-player');
+            if (ytEl) {
+                ytEl.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+                document.body.appendChild(ytEl);
+            }
+        }
+        stopYTSeekPolling();
     }
 }
 
-/** Aggiorna il contenuto visivo (copertina o video) */
+/** Aggiorna il contenuto visivo: YT iframe, video locale, o copertina */
 export function updateExpandedView(idx) {
     const vContainer = document.getElementById('visual-container');
-    if (!vContainer || idx === -1) return;
-
-    const track = state.playlist[idx];
+    if (!vContainer) return;
     vContainer.innerHTML = '';
+
+    // ── Caso YT: mostra l'iframe già esistente nel DOM ──────────────────────
+    if (state.currentYTId) {
+        const ytEl = document.getElementById('yt-player');
+        if (ytEl) {
+            ytEl.style.cssText = 'width:100%;height:100%;max-height:80vh;opacity:1;pointer-events:auto;position:relative;border-radius:10px;';
+            vContainer.appendChild(ytEl);
+        }
+        // Polling già avviato da playItem; non serve riavviarlo qui
+        return;
+    }
+
+    // ── Caso locale ──────────────────────────────────────────────────────────
+    stopYTSeekPolling();
+    const resolvedIdx = (idx !== undefined) ? idx : state.currentPlayingIdx;
+    if (resolvedIdx === -1) return;
+    const track = state.playlist[resolvedIdx];
+    if (!track) return;
 
     if (track.file.type.startsWith('video/')) {
         vContainer.appendChild(audio);
@@ -32,9 +88,8 @@ export function updateExpandedView(idx) {
         audio.style.maxHeight = '100%';
     } else {
         const img = document.createElement('img');
-        img.src          = track.cover || 'https://placehold.co/512x512';
-        img.style.width  = '85%';
-        img.style.borderRadius = '15px';
+        img.src = track.cover || 'https://placehold.co/512x512';
+        img.style.cssText = 'width:85%;border-radius:15px;';
         vContainer.appendChild(img);
         document.body.appendChild(audio);
         audio.style.display = 'none';
