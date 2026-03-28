@@ -1,34 +1,95 @@
 // ─── YOUTUBE ──────────────────────────────────────────────────────────────────
-// Dipende da: config.js, state.js, utils.js, player.js, queue.js
+import { YT_API_KEY }        from './config.js';
+import { state }             from './state.js';
+import { updateUI }          from './ui.js';
+import { escapeHtml, formatTime, parseISO8601Duration, showToast } from './utils.js';
+import { playTrack }         from './player.js';
 
-// ── IFrame API callback (chiamata dall'SDK YT) ────────────────────────────────
-function onYouTubeIframeAPIReady() {
-    ytPlayer = new YT.Player('yt-player', {
+const audio           = document.getElementById('main-audio');
+const nowPlayingTitle = document.getElementById('now-playing-title');
+const playBtn         = document.getElementById('btn-play');
+
+// ─── IFrame API ───────────────────────────────────────────────────────────────
+
+/** Chiamato automaticamente dall'API YT quando lo script è pronto */
+window.onYouTubeIframeAPIReady = function () {
+    state.ytPlayer = new YT.Player('yt-player', {
         height: '1', width: '1', videoId: '',
         playerVars: { playsinline: 1, autoplay: 0 },
         events: {
             onReady: () => {
-                ytReady = true;
-                if (ytPendingVideoId) {
-                    ytPlayer.loadVideoById(ytPendingVideoId);
-                    ytPendingVideoId = null;
+                state.ytReady = true;
+                if (state.ytPendingVideoId) {
+                    state.ytPlayer.loadVideoById(state.ytPendingVideoId);
+                    state.ytPendingVideoId = null;
                 }
             },
-            onStateChange: onYTStateChange
-        }
+            onStateChange: (e) => {
+                if (e.data === YT.PlayerState.ENDED) {
+                    document.getElementById('btn-next').click();
+                }
+                playBtn.innerHTML = (e.data === YT.PlayerState.PLAYING)
+                    ? '<div style="display:flex;gap:6px;"><div style="width:6px;height:22px;background:#000;border-radius:2px;"></div><div style="width:6px;height:22px;background:#000;border-radius:2px;"></div></div>'
+                    : '<div style="width:0;height:0;border-left:18px solid #000;border-top:12px solid transparent;border-bottom:12px solid transparent;margin-left:5px;"></div>';
+            },
+        },
     });
-}
+};
 
-function onYTStateChange(e) {
-    if (e.data === YT.PlayerState.ENDED) {
-        document.getElementById('btn-next').click();
+// ─── playItem (locale o YT) ───────────────────────────────────────────────────
+
+/** Riproduce un item, sia locale che YouTube */
+export function playItem(item) {
+    if (item.type === 'youtube') {
+        audio.pause();
+        state.currentYTId = item.id;
+        nowPlayingTitle.textContent = item.title;
+
+        // Highlight risultati YT
+        document.querySelectorAll('#youtube-results .track-item').forEach(el => {
+            const idx = parseInt(el.dataset.ytIdx);
+            const v = state.ytResults[idx];
+            const isPlaying = v && v.id === item.id;
+            el.style.borderLeft = isPlaying ? '5px solid var(--primary)' : '';
+            el.style.background = isPlaying ? '#252525' : '#1a1a1a';
+        });
+
+        if (state.ytReady && state.ytPlayer) {
+            state.ytPlayer.loadVideoById(item.id);
+        } else {
+            state.ytPendingVideoId = item.id;
+        }
+
+        // MediaSession per YT
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title:   item.title,
+                artist:  item.uploader || 'YouTube',
+                artwork: [{ src: item.thumb || '', sizes: '512x512', type: 'image/jpeg' }],
+            });
+            navigator.mediaSession.setActionHandler('previoustrack', () => document.getElementById('btn-prev').click());
+            navigator.mediaSession.setActionHandler('nexttrack',     () => document.getElementById('btn-next').click());
+        }
+
+        updateUI();
+        return;
     }
-    document.getElementById('btn-play').innerHTML =
-        (e.data === YT.PlayerState.PLAYING) ? DRAW.pause : DRAW.play;
+
+    // File locale
+    state.currentYTId = null;
+    const idx = state.playlist.indexOf(item);
+    playTrack(idx);
 }
 
-// ── Ricerca YouTube Data API v3 ───────────────────────────────────────────────
+// ─── Search ───────────────────────────────────────────────────────────────────
+
 let ytSearchDebounce = null;
+
+/** Avvia la ricerca con debounce (usato dal modulo search) */
+export function scheduleYTSearch(query, delayMs = 500) {
+    clearTimeout(ytSearchDebounce);
+    ytSearchDebounce = setTimeout(() => searchYouTube(query), delayMs);
+}
 
 async function searchYouTube(q) {
     const container = document.getElementById('youtube-results');
@@ -37,7 +98,7 @@ async function searchYouTube(q) {
     if (!q || q.length < 2) {
         section.style.display = 'none';
         container.innerHTML = '';
-        window.ytResults = [];
+        state.ytResults = [];
         return;
     }
 
@@ -56,7 +117,6 @@ async function searchYouTube(q) {
         </div>`;
 
     try {
-        // 1) Search
         const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&maxResults=3&key=${YT_API_KEY}`;
         const searchRes = await fetch(searchUrl);
         if (!searchRes.ok) throw new Error(await searchRes.text());
@@ -69,10 +129,8 @@ async function searchYouTube(q) {
         }
 
         const videoIds = items.map(i => i.id.videoId).join(',');
-
-        // 2) Videos.list (durata)
-        const detailUrl  = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${videoIds}&key=${YT_API_KEY}`;
-        const detailRes  = await fetch(detailUrl, { signal: AbortSignal.timeout(8000) });
+        const detailUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${videoIds}&key=${YT_API_KEY}`;
+        const detailRes = await fetch(detailUrl, { signal: AbortSignal.timeout(8000) });
         const detailData = detailRes.ok ? await detailRes.json() : { items: [] };
 
         const durationMap = {};
@@ -80,16 +138,16 @@ async function searchYouTube(q) {
             durationMap[v.id] = parseISO8601Duration(v.contentDetails.duration);
         });
 
-        window.ytResults = items.map(item => ({
+        state.ytResults = items.map(item => ({
             type:     'youtube',
             id:       item.id.videoId,
             title:    item.snippet.title,
             thumb:    item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
             duration: durationMap[item.id.videoId] || 0,
-            uploader: item.snippet.channelTitle || 'YouTube'
+            uploader: item.snippet.channelTitle || 'YouTube',
         }));
 
-        renderYouTubeResults(window.ytResults);
+        renderYouTubeResults(state.ytResults);
 
     } catch (err) {
         console.error('YouTube search error:', err);
@@ -97,7 +155,6 @@ async function searchYouTube(q) {
     }
 }
 
-// ── Render risultati ──────────────────────────────────────────────────────────
 function renderYouTubeResults(results) {
     const container = document.getElementById('youtube-results');
     container.innerHTML = '';
@@ -107,16 +164,14 @@ function renderYouTubeResults(results) {
         const el = document.createElement('div');
         el.className = 'track-item';
         el.dataset.ytIdx = i;
-
         el.style.background   = '#1a1a1a';
         el.style.borderBottom = i < n - 1 ? '1px solid #2a2a2a' : 'none';
         el.style.marginBottom = i === n - 1 ? '15px' : '0';
-        if      (n === 1)       el.style.borderRadius = '15px';
-        else if (i === 0)       el.style.borderRadius = '15px 15px 0 0';
-        else if (i === n - 1)   el.style.borderRadius = '0 0 15px 15px';
+        if      (n === 1)    el.style.borderRadius = '15px';
+        else if (i === 0)    el.style.borderRadius = '15px 15px 0 0';
+        else if (i === n-1)  el.style.borderRadius = '0 0 15px 15px';
 
         const durStr = video.duration ? formatTime(video.duration) : '';
-
         el.innerHTML = `
             <div class="track-cover">
                 <img src="${video.thumb}" alt="" onerror="this.parentElement.innerHTML='▶️'">
@@ -130,9 +185,9 @@ function renderYouTubeResults(results) {
                 </div>
             </div>`;
 
-        el.querySelector('[data-play-yt]').onclick = () => playItem(window.ytResults[i]);
+        el.querySelector('[data-play-yt]').onclick = () => playItem(state.ytResults[i]);
 
-        if (currentYTId && currentYTId === video.id) {
+        if (state.currentYTId && state.currentYTId === video.id) {
             el.style.borderLeft = '5px solid var(--primary)';
             el.style.background = '#252525';
         }
@@ -142,7 +197,6 @@ function renderYouTubeResults(results) {
     });
 }
 
-// ── Swipe su risultato YT ─────────────────────────────────────────────────────
 function setupYTSwipe(el, idx) {
     let sX = 0, sY = 0, cX = 0, isSwipe = false;
     const threshold = 50;
@@ -151,9 +205,9 @@ function setupYTSwipe(el, idx) {
         sX = e.touches[0].clientX; sY = e.touches[0].clientY;
         isSwipe = false; el.style.transition = 'none';
     };
-
     el.ontouchmove = e => {
-        let dX = e.touches[0].clientX - sX, dY = e.touches[0].clientY - sY;
+        const dX = e.touches[0].clientX - sX;
+        const dY = e.touches[0].clientY - sY;
         if (!isSwipe) {
             if (Math.abs(dX) > Math.abs(dY) && Math.abs(dX) > 10) isSwipe = true;
             else if (Math.abs(dY) > 10) return;
@@ -167,19 +221,18 @@ function setupYTSwipe(el, idx) {
                 : `rgba(33,150,243,${Math.min(Math.abs(cX) / 100, 0.4)})`;
         }
     };
-
     el.ontouchend = () => {
         el.style.transition = '0.4s cubic-bezier(0.18,0.89,0.32,1.28)';
         el.style.transform = 'translateX(0)';
         el.style.backgroundColor = '';
         if (isSwipe && Math.abs(cX) > threshold) {
             if (navigator.vibrate) navigator.vibrate(30);
-            const video = window.ytResults[idx];
-            if (cX > 0) { queue.unshift(video); showToast('In cima ↑'); }
-            else         { queue.push(video);    showToast('In fondo ↓'); }
-            renderQueue();
+            const video = state.ytResults[idx];
+            if (cX > 0) { state.queue.unshift(video); showToast('In cima ↑'); }
+            else         { state.queue.push(video);    showToast('In fondo ↓'); }
+            // renderQueue importato dinamicamente per evitare dipendenza circolare
+            import('./queue.js').then(m => m.renderQueue());
         }
         cX = 0;
     };
 }
-
