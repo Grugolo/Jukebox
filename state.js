@@ -1,21 +1,27 @@
 // ─── STATE ────────────────────────────────────────────────────────────────────
-// Tutte le variabili mutabili condivise tra i moduli.
-// Modificare sempre tramite i setter per mantenere la coerenza.
+// Unico oggetto mutabile condiviso tra tutti i moduli.
+// Importare `state` e modificarne le proprietà direttamente.
 
-let playlist            = [];
-let queue               = [];
-let currentPlayingIdx   = -1;
-let lastManualLibraryIdx = -1;
-let isLooping           = false;
-let isShuffle           = false;
-let shuffleOrder        = [];
-let playHistory         = [];
-let startTime           = null;
+export const state = {
+    // Libreria locale
+    playlist:             [],   // { file, folder, cover }
+    currentPlayingIdx:    -1,
+    lastManualLibraryIdx: -1,
+    playHistory:          [],
+    startTime:            null,
 
-let ytPlayer            = null;
-let ytReady             = false;
-let ytPendingVideoId    = null;
-let currentYTId         = null;
+    // Queue
+    queue: [],
 
-window.ytResults        = [];
+    // Modalità
+    isLooping:    false,
+    isShuffle:    false,
+    shuffleOrder: [],
 
+    // YouTube
+    ytPlayer:        null,
+    ytReady:         false,
+    ytPendingVideoId: null,
+    currentYTId:     null,   // id video YT in riproduzione
+    ytResults:       [],     // risultati ultima ricerca
+};
