@@ -15,13 +15,14 @@ const playBtn         = document.getElementById('btn-play');
 window.onYouTubeIframeAPIReady = function () {
     state.ytPlayer = new YT.Player('yt-player', {
         height: '1', width: '1', videoId: '',
-        playerVars: { playsinline: 1, autoplay: 0 },
+        playerVars: { playsinline: 1, autoplay: 1 },
         events: {
             onReady: () => {
                 state.ytReady = true;
                 if (state.ytPendingVideoId) {
                     state.ytPlayer.loadVideoById(state.ytPendingVideoId);
                     state.ytPendingVideoId = null;
+                    setTimeout(() => state.ytPlayer?.playVideo?.(), 300);
                 }
             },
             onStateChange: (e) => {
@@ -41,7 +42,10 @@ window.onYouTubeIframeAPIReady = function () {
 /** Riproduce un item, sia locale che YouTube */
 export function playItem(item) {
     if (item.type === 'youtube') {
+        // Ferma e svuota l'audio locale per evitare che intercetti i controlli
         audio.pause();
+        audio.src = '';
+
         state.currentYTId = item.id;
         nowPlayingTitle.textContent = item.title;
 
@@ -56,6 +60,8 @@ export function playItem(item) {
 
         if (state.ytReady && state.ytPlayer) {
             state.ytPlayer.loadVideoById(item.id);
+            // playVideo esplicito dopo un tick: necessario quando autoplay è bloccato dal browser
+            setTimeout(() => state.ytPlayer?.playVideo?.(), 300);
         } else {
             state.ytPendingVideoId = item.id;
         }
