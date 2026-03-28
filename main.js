@@ -1,7 +1,14 @@
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
-// Entry point. Dipende da tutti gli altri moduli.
+// Entry point: importa tutto e inizializza al caricamento.
+import './controls.js';
+import './library.js';
+import { updateUI }           from './ui.js';
+import { renderPlaylists }    from './queue.js';
+import { setupExpandedSwipe, togglePlayer } from './expandedPlayer.js';
+import { scheduleYTSearch }   from './ytApi.js';
+import { playTrack }          from './player.js';
 
-// ── Ricerca con debounce ──────────────────────────────────────────────────────
+// ─── Search ───────────────────────────────────────────────────────────────────
 document.getElementById('search-input').oninput = (e) => {
     const val = e.target.value.toLowerCase();
 
@@ -16,18 +23,20 @@ document.getElementById('search-input').oninput = (e) => {
         g.style.display = has ? 'block' : 'none';
     });
 
-    // Debounce ricerca YT
-    clearTimeout(ytSearchDebounce);
-    ytSearchDebounce = setTimeout(() => searchYouTube(val), 500);
+    // Ricerca YT con debounce
+    scheduleYTSearch(val, 500);
 };
 
-// ── Click sul titolo → apre player espanso ────────────────────────────────────
+// ─── Now-playing → apri player espanso ───────────────────────────────────────
 document.getElementById('now-playing-title').onclick = () => togglePlayer(true);
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ─── Globali per compatibilità onclick inline nel DOM ────────────────────────
+window._playTrack = playTrack;
+window.togglePlayer = togglePlayer;
+
+// ─── Init ────────────────────────────────────────────────────────────────────
 window.onload = () => {
     updateUI();
     renderPlaylists();
     setupExpandedSwipe();
 };
-
