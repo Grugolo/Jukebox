@@ -1,2 +1,2 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const YT_API_KEY = 'AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0';
+export const YT_API_KEY = 'AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0';
