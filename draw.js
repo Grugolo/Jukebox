@@ -1,4 +1,4 @@
- const DRAW = {
+export const DRAW = {
         play: '<div style="width:0; height:0; border-left:18px solid #000; border-top:12px solid transparent; border-bottom:12px solid transparent; margin-left:5px;"></div>',
         pause: '<div style="display:flex; gap:6px;"><div style="width:6px; height:22px; background:#000; border-radius:2px;"></div><div style="width:6px; height:22px; background:#000; border-radius:2px;"></div></div>',
         next: '<div style="display:flex; align-items:center;"><div style="width:0; height:0; border-left:12px solid #fff; border-top:8px solid transparent; border-bottom:8px solid transparent;"></div><div style="width:3px; height:16px; background:#fff; border-radius:1px;"></div></div>',
