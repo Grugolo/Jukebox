@@ -10,11 +10,15 @@ const playBtn = document.getElementById('btn-play');
 
 // ─── Play / Pause ─────────────────────────────────────────────────────────────
 playBtn.onclick = () => {
-    if (state.ytReady && state.ytPlayer && typeof state.ytPlayer.getPlayerState === 'function') {
+    // Se c'è un video YT attivo, delega sempre al ytPlayer
+    if (state.currentYTId && state.ytReady && state.ytPlayer) {
         const s = state.ytPlayer.getPlayerState();
-        if (s === YT.PlayerState.PLAYING) { state.ytPlayer.pauseVideo(); return; }
-        if (s === YT.PlayerState.PAUSED)  { state.ytPlayer.playVideo();  return; }
+        if (s === YT.PlayerState.PLAYING)   { state.ytPlayer.pauseVideo(); return; }
+        // Unstarted (-1), cued (5), paused (2), buffering (3) → forza play
+        state.ytPlayer.playVideo();
+        return;
     }
+    // Altrimenti gestisci l'audio locale
     audio.paused ? audio.play() : audio.pause();
 };
 
