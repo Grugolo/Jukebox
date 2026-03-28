@@ -1,146 +1,70 @@
 // ─── PLAYER ───────────────────────────────────────────────────────────────────
-// Dipende da: state.js, utils.js, ui.js, expandedPlayer.js
+import { state }      from './state.js';
+import { updateUI }   from './ui.js';
+import { formatTime } from './utils.js';
+import { updateExpandedView } from './expandedPlayer.js';
 
-const audio         = document.getElementById('main-audio');
-const seekSlider    = document.getElementById('seek-slider');
-const timeCurrent   = document.getElementById('time-current');
-const timeTotal     = document.getElementById('time-total');
+const audio       = document.getElementById('main-audio');
+const seekSlider  = document.getElementById('seek-slider');
+const timeCurrent = document.getElementById('time-current');
+const timeTotal   = document.getElementById('time-total');
 const nowPlayingTitle = document.getElementById('now-playing-title');
-const playBtn       = document.getElementById('btn-play');
 
-// ── Riproduci traccia locale ──────────────────────────────────────────────────
-function playTrack(idx, fromQueue = false, isBack = false) {
-    if (idx < 0 || idx >= playlist.length) return;
-    currentYTId = null;
-    if (!isBack && currentPlayingIdx !== -1 && currentPlayingIdx !== idx) {
-        playHistory.push(currentPlayingIdx);
+/** Riproduce la traccia locale all'indice `idx` */
+export function playTrack(idx, fromQueue = false, isBack = false) {
+    if (idx < 0 || idx >= state.playlist.length) return;
+
+    state.currentYTId = null;
+
+    if (!isBack && state.currentPlayingIdx !== -1 && state.currentPlayingIdx !== idx) {
+        state.playHistory.push(state.currentPlayingIdx);
     }
-    currentPlayingIdx = idx;
-    if (!fromQueue) lastManualLibraryIdx = idx;
 
-    const track = playlist[idx];
+    state.currentPlayingIdx = idx;
+    if (!fromQueue) state.lastManualLibraryIdx = idx;
+
+    const track = state.playlist[idx];
     audio.src = URL.createObjectURL(track.file);
     audio.play();
 
     nowPlayingTitle.textContent = track.file.name.replace(/\.[^/.]+$/, '');
     updateUI();
     updateExpandedView(idx);
-
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title:   nowPlayingTitle.textContent,
-            artist:  track.folder.split('/').pop(),
-            artwork: [{ src: track.cover || 'https://placehold.co/512x512', sizes: '512x512', type: 'image/png' }]
-        });
-        navigator.mediaSession.setActionHandler('previoustrack', () => document.getElementById('btn-prev').click());
-        navigator.mediaSession.setActionHandler('nexttrack',     () => document.getElementById('btn-next').click());
-        navigator.mediaSession.setActionHandler('play',  () => audio.play());
-        navigator.mediaSession.setActionHandler('pause', () => audio.pause());
-    }
+    setupMediaSession(track, nowPlayingTitle.textContent);
 }
 
-// ── Riproduci item generico (locale o YT) ─────────────────────────────────────
-function playItem(item) {
-    if (item.type === 'youtube') {
-        audio.pause();
-        currentYTId = item.id;
-        nowPlayingTitle.textContent = item.title;
-
-        document.querySelectorAll('#youtube-results .track-item').forEach(el => {
-            const idx = parseInt(el.dataset.ytIdx);
-            const v = window.ytResults[idx];
-            if (v && v.id === item.id) {
-                el.style.borderLeft = '5px solid var(--primary)';
-                el.style.background = '#252525';
-            } else {
-                el.style.borderLeft = '';
-                el.style.background = '#1a1a1a';
-            }
-        });
-
-        if (ytReady && ytPlayer) {
-            ytPlayer.loadVideoById(item.id);
-        } else {
-            ytPendingVideoId = item.id;
-        }
-
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title:   item.title,
-                artist:  item.uploader || 'YouTube',
-                artwork: [{ src: item.thumb || '', sizes: '512x512', type: 'image/jpeg' }]
-            });
-            navigator.mediaSession.setActionHandler('previoustrack', () => document.getElementById('btn-prev').click());
-            navigator.mediaSession.setActionHandler('nexttrack',     () => document.getElementById('btn-next').click());
-        }
-
-        updateUI();
-        return;
-    }
-
-    // File locale
-    currentYTId = null;
-    const idx = playlist.indexOf(item);
-    playTrack(idx);
+function setupMediaSession(track, title) {
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title,
+        artist:  track.folder.split('/').pop(),
+        artwork: [{ src: track.cover || 'https://placehold.co/512x512', sizes: '512x512', type: 'image/png' }],
+    });
+    navigator.mediaSession.setActionHandler('previoustrack', () => document.getElementById('btn-prev').click());
+    navigator.mediaSession.setActionHandler('nexttrack',     () => document.getElementById('btn-next').click());
+    navigator.mediaSession.setActionHandler('play',  () => audio.play());
+    navigator.mediaSession.setActionHandler('pause', () => audio.pause());
 }
 
-// ── Controlli ─────────────────────────────────────────────────────────────────
-playBtn.onclick = () => {
-    if (ytReady && ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
-        const state = ytPlayer.getPlayerState();
-        if (state === YT.PlayerState.PLAYING) { ytPlayer.pauseVideo(); return; }
-        if (state === YT.PlayerState.PAUSED)  { ytPlayer.playVideo();  return; }
-    }
-    audio.paused ? audio.play() : audio.pause();
-};
-
-document.getElementById('btn-shuffle').onclick = () => {
-    isShuffle = !isShuffle;
-    if (isShuffle) {
-        shuffleOrder = Array.from(Array(playlist.length).keys());
-        for (let i = shuffleOrder.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffleOrder[i], shuffleOrder[j]] = [shuffleOrder[j], shuffleOrder[i]];
-        }
-    }
-    if (navigator.vibrate) navigator.vibrate(30);
-    updateUI();
-};
-
-document.getElementById('btn-loop').onclick = () => { isLooping = !isLooping; updateUI(); };
-
-document.getElementById('btn-next').onclick = () => {
-    if (queue.length > 0) {
-        const next = queue.shift();
-        renderQueue();
-        playItem(next);
-        return;
-    }
-    let nextIdx = lastManualLibraryIdx + 1;
-    if (isShuffle) nextIdx = Math.floor(Math.random() * playlist.length);
-    if (nextIdx < playlist.length) playTrack(nextIdx);
-};
-
-document.getElementById('btn-prev').onclick = () => {
-    if (audio.currentTime > 3) return (audio.currentTime = 0);
-    if (playHistory.length) { playTrack(playHistory.pop(), false, true); return; }
-    if (currentPlayingIdx > 0) playTrack(currentPlayingIdx - 1);
-};
-
-// ── Audio events ──────────────────────────────────────────────────────────────
-audio.onplay  = updateUI;
-audio.onpause = updateUI;
-
-audio.onended = () => {
-    if (isLooping) { audio.currentTime = 0; audio.play(); }
-    else document.getElementById('btn-next').click();
-};
-
+// ─── Seekbar ──────────────────────────────────────────────────────────────────
 audio.ontimeupdate = () => {
     seekSlider.value = (audio.currentTime / audio.duration) * 100 || 0;
     timeCurrent.textContent = formatTime(audio.currentTime);
     if (audio.duration) timeTotal.textContent = formatTime(audio.duration);
 };
 
-seekSlider.oninput = () => { audio.currentTime = (seekSlider.value / 100) * audio.duration; };
+seekSlider.oninput = () => {
+    audio.currentTime = (seekSlider.value / 100) * audio.duration;
+};
 
+// ─── Audio events ─────────────────────────────────────────────────────────────
+audio.onplay  = updateUI;
+audio.onpause = updateUI;
+audio.onended = () => {
+    if (state.isLooping) {
+        audio.currentTime = 0;
+        audio.play();
+    } else {
+        document.getElementById('btn-next').click();
+    }
+};
