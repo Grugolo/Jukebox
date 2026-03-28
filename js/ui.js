@@ -7,13 +7,16 @@ const playBtn  = document.getElementById('btn-play');
 
 /** Ridisegna pulsanti e highlight libreria */
 export function updateUI() {
-    const isYTPlaying =
-        state.ytReady &&
-        state.ytPlayer &&
-        typeof state.ytPlayer.getPlayerState === 'function' &&
-        state.ytPlayer.getPlayerState() === YT.PlayerState.PLAYING;
+    let isYTPlaying = false;
+    // Controlla YT solo se c'è un video YT attivo e l'API è pronta
+    if (state.currentYTId && state.ytReady && state.ytPlayer &&
+        typeof YT !== 'undefined' && typeof state.ytPlayer.getPlayerState === 'function') {
+        isYTPlaying = state.ytPlayer.getPlayerState() === YT.PlayerState.PLAYING;
+    }
 
-    const isPlaying = isYTPlaying || !audio.paused;
+    // Se è un video YT, l'audio locale è svuotato (src='') → audio.paused è sempre true
+    // Quindi usiamo isYTPlaying come fonte di verità per YT
+    const isPlaying = state.currentYTId ? isYTPlaying : !audio.paused;
 
     playBtn.innerHTML = isPlaying ? DRAW.pause : DRAW.play;
     document.getElementById('btn-next').innerHTML    = DRAW.next;
