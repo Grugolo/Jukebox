@@ -54,7 +54,12 @@ audio.ontimeupdate = () => {
 };
 
 seekSlider.oninput = () => {
-    audio.currentTime = (seekSlider.value / 100) * audio.duration;
+    if (state.currentYTId && state.ytReady && state.ytPlayer) {
+        const dur = state.ytPlayer.getDuration() || 0;
+        state.ytPlayer.seekTo((seekSlider.value / 100) * dur, true);
+    } else {
+        audio.currentTime = (seekSlider.value / 100) * audio.duration;
+    }
 };
 
 // ─── Audio events ─────────────────────────────────────────────────────────────
