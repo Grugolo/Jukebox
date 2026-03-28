@@ -4,6 +4,7 @@ import { state }             from './state.js';
 import { updateUI }          from './ui.js';
 import { escapeHtml, formatTime, parseISO8601Duration, showToast } from './utils.js';
 import { playTrack }         from './player.js';
+import { stopYTSeekPolling, startYTSeekPolling } from './expandedPlayer.js';
 
 const audio           = document.getElementById('main-audio');
 const nowPlayingTitle = document.getElementById('now-playing-title');
@@ -78,11 +79,19 @@ export function playItem(item) {
         }
 
         updateUI();
+        startYTSeekPolling();
         return;
     }
 
     // File locale
     state.currentYTId = null;
+    stopYTSeekPolling();
+    // Rimetti l'iframe YT al posto nascosto originale
+    const ytEl = document.getElementById('yt-player');
+    if (ytEl && !document.body.contains(ytEl)) document.body.appendChild(ytEl);
+    if (ytEl) ytEl.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+    // Ferma il player YT se attivo
+    if (state.ytReady && state.ytPlayer) state.ytPlayer.stopVideo?.();
     const idx = state.playlist.indexOf(item);
     playTrack(idx);
 }
