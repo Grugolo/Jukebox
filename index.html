@@ -67,7 +67,6 @@
 <video id="main-audio" style="display:none;"></video>
 
 <div id="yt-player" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;"></div>
-<script src="https://www.youtube.com/iframe_api"></script>
 
 <div id="expanded-player">
     <div class="close-indicator">
@@ -76,11 +75,15 @@
     </div>
     <div id="visual-container"></div>
 </div>
-
-
-
-  <script type = "module" src="js/main.js"></script>
     
+<script>
+  // Placeholder sincrono, verrà sovrascritto dal modulo
+  window.onYouTubeIframeAPIReady = function() {
+    window._ytApiReadyQueue = true;
+  };
+</script>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script type="module" src="js/main.js"></script>    
     
 
 </body>
