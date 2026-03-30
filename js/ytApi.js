@@ -44,10 +44,10 @@ window.onYouTubeIframeAPIReady = function () {
 export function playItem(item) {
     if (item.type === 'youtube') {
        
-console.log('playItem YT chiamato:', item.id);
-console.log('ytReady:', state.ytReady);
-console.log('ytPlayer:', state.ytPlayer);
-console.log('YT global:', typeof YT);
+toast('playItem YT chiamato:', item.id);
+toast('ytReady:', state.ytReady);
+toast('ytPlayer:', state.ytPlayer);
+toast('YT global:', typeof YT);
         
         // Ferma e svuota l'audio locale per evitare che intercetti i controlli
         audio.pause();
