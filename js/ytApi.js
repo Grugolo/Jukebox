@@ -19,13 +19,23 @@ window.onYouTubeIframeAPIReady = function () {
         playerVars: { playsinline: 1, autoplay: 1 },
         events: {
             onReady: () => {
-                state.ytReady = true;
-                if (state.ytPendingVideoId) {
-                    state.ytPlayer.loadVideoById(state.ytPendingVideoId);
-                    state.ytPendingVideoId = null;
-                    setTimeout(() => state.ytPlayer?.playVideo?.(), 300);
-                }
-            },
+    state.ytReady = true;
+
+    if (state.ytPendingVideoId) {
+        state.ytPlayer.loadVideoById(state.ytPendingVideoId);
+
+        setTimeout(() => {
+            try {
+                state.ytPlayer.playVideo();
+            } catch(e) {
+                console.warn('YT play failed:', e);
+            }
+        }, 500);
+
+        state.ytPendingVideoId = null;
+    }
+},
+            
             onStateChange: (e) => {
                 if (e.data === YT.PlayerState.ENDED) {
                     document.getElementById('btn-next').click();
@@ -60,6 +70,10 @@ export function playItem(item) {
         });
 
         if (state.ytReady && state.ytPlayer) {
+            if (!state.ytPlayer) {
+    state.ytPendingVideoId = item.id;
+    return;
+            }
             state.ytPlayer.loadVideoById(item.id);
             // playVideo esplicito dopo un tick: necessario quando autoplay è bloccato dal browser
             setTimeout(() => state.ytPlayer?.playVideo?.(), 300);
