@@ -43,6 +43,12 @@ window.onYouTubeIframeAPIReady = function () {
 /** Riproduce un item, sia locale che YouTube */
 export function playItem(item) {
     if (item.type === 'youtube') {
+       
+console.log('playItem YT chiamato:', item.id);
+console.log('ytReady:', state.ytReady);
+console.log('ytPlayer:', state.ytPlayer);
+console.log('YT global:', typeof YT);
+        
         // Ferma e svuota l'audio locale per evitare che intercetti i controlli
         audio.pause();
         audio.src = '';
