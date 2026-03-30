@@ -66,12 +66,12 @@ export function playItem(item) {
         } else {
             state.ytPendingVideoId = item.id;
             // Carica lo script IFrame API se non ancora presente
-            if (!document.getElementById('yt-iframe-api')) {
-            const tag = document.createElement('script');
-            tag.id  = 'yt-iframe-api';
-            tag.src = 'https://www.youtube.com/iframe_api';
-            document.head.appendChild(tag);
-            }
+if (!window.YT && !document.getElementById('yt-iframe-api')) {
+    const tag = document.createElement('script');
+    tag.id  = 'yt-iframe-api';
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+}
       }
 
         // MediaSession per YT
