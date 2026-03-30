@@ -9,10 +9,12 @@ const playBtn  = document.getElementById('btn-play');
 export function updateUI() {
     let isYTPlaying = false;
     // Controlla YT solo se c'è un video YT attivo e l'API è pronta
+    try {
     if (state.currentYTId && state.ytReady && state.ytPlayer &&
         typeof YT !== 'undefined' && typeof state.ytPlayer.getPlayerState === 'function') {
         isYTPlaying = state.ytPlayer.getPlayerState() === YT.PlayerState.PLAYING;
-    }
+        }
+    }  catch(_) {}
 
     // Se è un video YT, l'audio locale è svuotato (src='') → audio.paused è sempre true
     // Quindi usiamo isYTPlaying come fonte di verità per YT
