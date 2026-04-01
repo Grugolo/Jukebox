@@ -16,7 +16,7 @@ import { emit } from '../core/events.js';
 // Assumiamo uso API YouTube Data V3 (richiede API key)
 // Restituisce array di Track
 export async function search(query) {
-  const API_KEY = 'YOUR_API_KEY_HERE'; // sostituire con chiave reale
+  const API_KEY = 'AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0'; // sostituire con chiave reale
   const endpoint = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(query)}&maxResults=10&key=${API_KEY}`;
 
   const res = await fetch(endpoint);
