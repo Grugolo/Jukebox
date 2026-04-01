@@ -1,83 +1,53 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Grugofy</title>
-    
-    <link rel="stylesheet" href="style.css">
-    
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>La Mia App Samsung-Style</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header>
-    <label class="custom-file-upload">
-        <input id="folderInput" type="file" webkitdirectory multiple accept="audio/*, video/*">
-        CARICA
-    </label>
-    <input type="text" id="search-input" placeholder="Cerca brano...">
-</header>
+  <!-- HEADER / TOP BAR -->
+  <header class="app-header">
+    <h1 class="app-title">La Mia App</h1>
+    <button class="btn-menu" data-action="toggle-menu">☰</button>
+  </header>
 
-<main id="content">
-    <div id="queue-section" style="display:none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <div class="section-title" style="margin:0">In Coda</div>
-            <button id="save-playlist-btn" style="background:var(--primary); border:none; border-radius:20px; padding:5px 12px; font-weight:bold; font-size:0.7rem; cursor:pointer;">SALVA CODA</button>
-        </div>
-        <div id="queue-list"></div>
-    </div>
+  <!-- MAIN CONTENT AREA -->
+  <main class="app-main">
 
-    <div id="playlist-manager">
-       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <div class="section-title" style="margin:0">Playlist Salvate</div>
-            <button id="save-history-btn" style="background:var(--primary); border:none; border-radius:20px; padding:5px 12px; font-weight:bold; font-size:0.7rem; cursor:pointer;">SALVA CRONOLOGIA</button>
-       </div>
-       <div id="saved-playlists-list"></div>
-    </div>
-    
-    <div id="yt-section" style="display:none;">
-        <div class="section-title">YouTube</div>
-        <div id="youtube-results"></div>
-    </div>
-    
-    <div class="section-title">Libreria</div>
-    <div id="library"></div>
-</main>
+    <!-- LIBRERIA / LISTA CONTENUTI -->
+    <section class="library-screen" data-ui="library">
+      <h2>La Mia Libreria</h2>
+      <ul class="library-list">
+        <!-- Gli elementi saranno popolati via JS -->
+      </ul>
+    </section>
 
-<div id="player-bar">
-    <div id="now-playing-title" style="text-align:center; font-weight:bold; margin-bottom:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:0.9rem;">Seleziona un brano</div>
-    
-    <div class="progress-container">
-        <span class="time-label" id="time-current">0:00</span>
-        <input type="range" id="seek-slider" value="0" max="100">
-        <span class="time-label" id="time-total">0:00</span>
-    </div>
+    <!-- SCHERMATA ESPANSA / DETTAGLIO -->
+    <section class="expanded-screen" data-ui="expanded">
+      <button class="btn-back" data-action="close-expanded">← Indietro</button>
+      <div class="expanded-content">
+        <!-- Contenuto dinamico -->
+      </div>
+    </section>
 
-    <div class="controls">
-        <div class="ctrl-btn btn-loop-indicator" id="btn-shuffle"></div>
-        <div class="ctrl-btn" id="btn-prev"></div>
-        <div class="ctrl-btn btn-main" id="btn-play"></div>
-        <div class="ctrl-btn" id="btn-next"></div>
-        <div class="ctrl-btn btn-loop-indicator" id="btn-loop"></div>
-    </div>
-</div>
+  </main>
 
-<video id="main-audio" style="display:none;"></video>
+  <!-- MENU / CONTROLLI LATERALI -->
+  <aside class="side-menu" data-ui="menu">
+    <nav>
+      <ul>
+        <li><button data-action="go-home">Home</button></li>
+        <li><button data-action="open-settings">Impostazioni</button></li>
+        <li><button data-action="logout">Logout</button></li>
+      </ul>
+    </nav>
+  </aside>
 
-<div id="yt-player" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;"></div>
-
-<div id="expanded-player">
-    <div class="close-indicator">
-        <div style="width:20px; height:4px; background:#fff; border-radius:2px; transform: rotate(10deg) translateX(4px); display:inline-block;"></div>
-        <div style="width:20px; height:4px; background:#fff; border-radius:2px; transform: rotate(-10deg) translateX(-4px); display:inline-block;"></div>
-    </div>
-    <div id="visual-container"></div>
-</div>
-    
-<script type="module" src="js/main.js"></script>    
-    
+  <!-- SCRIPTS -->
+  <script type="module" src="js/main.js"></script>
 
 </body>
 </html>
