@@ -1,116 +1,117 @@
-// js/modules/youtube.js
+// ── youtube.js ───────────────────────────────────────────────────
+// Ricerca YouTube e avvio riproduzione YT.
 
-import { emit } from '../core/events.js';
+import { YT_API_KEY }    from '../config.js';
+import { store }         from '../core/store.js';
+import { playYT }        from '../core/player.js';
+import { makeTrackEl }   from './localFiles.js';
+import { parseISO8601, escHtml } from '../utils.js';
 
-/**
- * Track YouTube = {
- *   type: 'youtube',
- *   id: string,
- *   title: string,
- *   duration: number (secondi),
- *   thumb: string (thumbnail URL)
- * }
- */
+const ytSection = document.getElementById('ytSection');
+const ytResults = document.getElementById('ytResults');
 
-// --- SEARCH YOUTUBE ---
-// Assumiamo uso API YouTube Data V3 (richiede API key)
-// Restituisce array di Track
-export async function search(query) {
-  const API_KEY = 'AIzaSyBwZsEchAW5KOytpVE6lqRQaXYdOrsbYT0'; // sostituire con chiave reale
-  const endpoint = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(query)}&maxResults=10&key=${API_KEY}`;
+/* ── Ricerca con debounce ───────────────────────────────────────── */
+let _debounce = null;
 
-  const res = await fetch(endpoint);
-  if (!res.ok) throw new Error('YouTube API error');
-
-  const data = await res.json();
-  const tracks = [];
-
-  for (const item of data.items) {
-    const videoId = item.id.videoId;
-    const title = item.snippet.title;
-    const thumb = item.snippet.thumbnails.medium.url;
-
-    // Durata va ottenuta separatamente con video API
-    const duration = await fetchDuration(videoId, API_KEY);
-
-    tracks.push({ type: 'youtube', id: videoId, title, duration, thumb });
-  }
-
-  // Notifica che sono stati caricati risultati
-  emit('youtubeResults', tracks);
-
-  return tracks;
+export function scheduleYTSearch(query, delayMs = 500) {
+  clearTimeout(_debounce);
+  _debounce = setTimeout(() => _search(query), delayMs);
 }
 
-// --- PLAYBACK HELPERS ---
-// Questi possono delegare a un player interno se si usa iframe API
-let youtubePlayer = null;
+/* ── Avvia riproduzione e aggiorna highlight ────────────────────── */
+export function playYTItem(item) {
+  playYT(item);
+  _highlight(item.id);
+}
 
-export function initPlayer(containerId) {
-  // containerId = id div per iframe YouTube
-  if (youtubePlayer) return;
+/* ═══════════════════════════════════════════════════════════════════
+   RICERCA
+   ═══════════════════════════════════════════════════════════════════ */
 
-  youtubePlayer = new YT.Player(containerId, {
-    height: '0',
-    width: '0',
-    events: {
-      onStateChange: onPlayerStateChange
+async function _search(q) {
+  if (!q || q.length < 2) {
+    ytSection.hidden   = true;
+    ytResults.innerHTML = '';
+    store.ytResults    = [];
+    return;
+  }
+
+  ytSection.hidden    = false;
+  ytResults.innerHTML = _skeletonHTML();
+
+  try {
+    // 1. Search
+    const searchRes  = await fetch(
+      `https://www.googleapis.com/youtube/v3/search` +
+      `?part=snippet&type=video&maxResults=3` +
+      `&q=${encodeURIComponent(q)}&key=${YT_API_KEY}`
+    );
+    const searchData = await searchRes.json();
+    const items      = searchData.items || [];
+
+    if (!items.length) {
+      ytResults.innerHTML = `<div style="color:var(--text-dim);padding:10px;">Nessun risultato</div>`;
+      return;
     }
+
+    // 2. Durate
+    const ids        = items.map(i => i.id.videoId).join(',');
+    const detailRes  = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos` +
+      `?part=contentDetails&id=${ids}&key=${YT_API_KEY}`
+    );
+    const detailData = await detailRes.json();
+
+    const durationMap = Object.fromEntries(
+      (detailData.items || []).map(v => [v.id, parseISO8601(v.contentDetails.duration)])
+    );
+
+    store.ytResults = items.map(item => ({
+      type:     'youtube',
+      id:       item.id.videoId,
+      title:    item.snippet.title,
+      thumb:    item.snippet.thumbnails?.medium?.url || '',
+      duration: durationMap[item.id.videoId] || 0,
+      uploader: item.snippet.channelTitle || 'YouTube',
+    }));
+
+    _renderResults(store.ytResults);
+
+  } catch (err) {
+    console.error('[YT search]', err);
+    ytResults.innerHTML = `<div style="color:red;padding:10px;">Errore ricerca</div>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════════════════════════════════ */
+
+function _renderResults(results) {
+  ytResults.innerHTML = '';
+  results.forEach((video, i) => {
+    ytResults.appendChild(makeTrackEl(video, '', i, true));
   });
 }
 
-export function play(videoId) {
-  if (!youtubePlayer) return;
-  youtubePlayer.loadVideoById(videoId);
-  emit('play');
+function _highlight(videoId) {
+  ytResults.querySelectorAll('.track-item').forEach(el => {
+    const idx   = parseInt(el.dataset.ytIdx);
+    const match = store.ytResults[idx]?.id === videoId;
+    el.style.borderLeft = match ? '5px solid var(--accent)' : '';
+    el.style.background = match ? '#252525' : '';
+  });
 }
 
-export function pause() {
-  if (!youtubePlayer) return;
-  youtubePlayer.pauseVideo();
-  emit('pause');
-}
-
-export function seek(time) {
-  if (!youtubePlayer) return;
-  youtubePlayer.seekTo(time, true);
-}
-
-// --- UTILS ---
-
-async function fetchDuration(videoId, apiKey) {
-  const endpoint = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${videoId}&key=${apiKey}`;
-  const res = await fetch(endpoint);
-  if (!res.ok) return 0;
-
-  const data = await res.json();
-  if (!data.items || !data.items[0]) return 0;
-
-  const durationISO = data.items[0].contentDetails.duration;
-  return iso8601ToSeconds(durationISO);
-}
-
-// Convert ISO 8601 duration (PT1H2M3S) → seconds
-function iso8601ToSeconds(iso) {
-  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  if (!match) return 0;
-  const hours = parseInt(match[1] || 0, 10);
-  const minutes = parseInt(match[2] || 0, 10);
-  const seconds = parseInt(match[3] || 0, 10);
-  return hours * 3600 + minutes * 60 + seconds;
-}
-
-// Event handler YouTube iframe API
-function onPlayerStateChange(event) {
-  switch (event.data) {
-    case YT.PlayerState.PLAYING:
-      emit('play');
-      break;
-    case YT.PlayerState.PAUSED:
-      emit('pause');
-      break;
-    case YT.PlayerState.ENDED:
-      emit('trackEnd');
-      break;
-  }
+/* ── Skeleton loader ────────────────────────────────────────────── */
+function _skeletonHTML() {
+  const row = `
+    <div class="skeleton-item">
+      <div class="skel-box skel-cover"></div>
+      <div class="skel-info">
+        <div class="skel-box skel-line"></div>
+        <div class="skel-box skel-line skel-short"></div>
+      </div>
+    </div>`;
+  return `<div class="skeleton-list">${row.repeat(3)}</div>`;
 }
