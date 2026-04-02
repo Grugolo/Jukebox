@@ -55,8 +55,15 @@ header {
   flex-shrink: 0;
 }
 
+.search-wrapper {
+  position: relative;
+  flex: 1;
+}
+
 #searchInput {
   flex: 1;
+  width: 100%;
+  padding-right: 35px;
   padding: 10px 15px;
   border-radius: 20px;
   border: 1px solid var(--accent);
@@ -64,6 +71,20 @@ header {
   color: #fff;
   outline: none;
   font-size: .9rem;
+}
+
+#clearSearchBtn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  opacity: 0.6;
+  display: none;
+}
+
+#clearSearchBtn.active {
+  display: block;
 }
 
 /* ── Main scroll ───────────────────────────────────────────────── */
