@@ -1,57 +1,25 @@
-// core/events.js
-// Responsabilità: comunicazione tra moduli (pub/sub)
-// NON gestisce stato né DOM
+// ── events.js ────────────────────────────────────────────────────
+// Event bus leggero per disaccoppiare core ↔ ui.
+// I moduli core emettono eventi; i moduli UI li ascoltano.
 
-const events = {};
+const _bus = new EventTarget();
 
-/**
- * Registra un callback per un evento
- * @param {string} eventName
- * @param {function} callback
- */
-export function on(eventName, callback) {
-  if (!events[eventName]) {
-    events[eventName] = [];
-  }
-  events[eventName].push(callback);
+export function emit(name, detail = {}) {
+  _bus.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
-/**
- * Deregistra un callback per un evento
- * @param {string} eventName
- * @param {function} callback
- */
-export function off(eventName, callback) {
-  if (!events[eventName]) return;
-  events[eventName] = events[eventName].filter(cb => cb !== callback);
+export function on(name, handler) {
+  _bus.addEventListener(name, e => handler(e.detail));
 }
 
-/**
- * Emissione di un evento con dati
- * @param {string} eventName
- * @param {*} data
- */
-export function emit(eventName, data) {
-  if (!events[eventName]) return;
-  // Copia array per evitare modifiche durante l'iterazione
-  [...events[eventName]].forEach(cb => {
-    try {
-      cb(data);
-    } catch (err) {
-      console.error(`Error in event listener for "${eventName}":`, err);
-    }
-  });
-}
-
-/**
- * Registra un callback che viene eseguito solo una volta
- * @param {string} eventName
- * @param {function} callback
- */
-export function once(eventName, callback) {
-  const wrapper = (data) => {
-    callback(data);
-    off(eventName, wrapper);
-  };
-  on(eventName, wrapper);
-}
+// Catalogo eventi
+export const EV = {
+  // Il player è cambiato (play/pause/traccia): aggiorna controlli UI
+  PLAYER_CHANGE: 'player:change',
+  // La traccia corrente è cambiata: aggiorna la vista espansa
+  VISUAL_UPDATE:  'visual:update',
+  // YT ha iniziato a suonare: avvia il polling della seekbar
+  YT_PLAYING:     'yt:playing',
+  // YT deve fermarsi: ferma il polling
+  YT_STOPPED:     'yt:stopped',
+};
