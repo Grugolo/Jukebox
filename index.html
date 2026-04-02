@@ -2,52 +2,79 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>La Mia App Samsung-Style</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Grugofy</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 </head>
 <body>
 
-  <!-- HEADER / TOP BAR -->
-  <header class="app-header">
-    <h1 class="app-title">La Mia App</h1>
-    <button class="btn-menu" data-action="toggle-menu">☰</button>
-  </header>
+<header>
+  <label class="btn-upload">
+    <input id="folderInput" type="file" webkitdirectory multiple accept="audio/*,video/*">
+    CARICA
+  </label>
+  <input type="text" id="searchInput" placeholder="Cerca brano…" autocomplete="off">
+</header>
 
-  <!-- MAIN CONTENT AREA -->
-  <main class="app-main">
+<main id="mainContent">
 
-    <!-- LIBRERIA / LISTA CONTENUTI -->
-    <section class="library-screen" data-ui="library">
-      <h2>La Mia Libreria</h2>
-      <ul class="library-list">
-        <!-- Gli elementi saranno popolati via JS -->
-      </ul>
-    </section>
+  <section id="queueSection" hidden>
+    <div class="section-header">
+      <span class="section-title">In Coda</span>
+      <button id="saveQueueBtn" class="pill-btn">SALVA CODA</button>
+    </div>
+    <div id="queueList"></div>
+  </section>
 
-    <!-- SCHERMATA ESPANSA / DETTAGLIO -->
-    <section class="expanded-screen" data-ui="expanded">
-      <button class="btn-back" data-action="close-expanded">← Indietro</button>
-      <div class="expanded-content">
-        <!-- Contenuto dinamico -->
-      </div>
-    </section>
+  <section id="playlistSection">
+    <div class="section-header">
+      <span class="section-title">Playlist Salvate</span>
+      <button id="saveHistoryBtn" class="pill-btn">SALVA CRONOLOGIA</button>
+    </div>
+    <div id="playlistList"></div>
+  </section>
 
-  </main>
+  <section id="ytSection" hidden>
+    <span class="section-title">YouTube</span>
+    <div id="ytResults"></div>
+  </section>
 
-  <!-- MENU / CONTROLLI LATERALI -->
-  <aside class="side-menu" data-ui="menu">
-    <nav>
-      <ul>
-        <li><button data-action="go-home">Home</button></li>
-        <li><button data-action="open-settings">Impostazioni</button></li>
-        <li><button data-action="logout">Logout</button></li>
-      </ul>
-    </nav>
-  </aside>
+  <span class="section-title">Libreria</span>
+  <div id="library"></div>
 
-  <!-- SCRIPTS -->
-  <script type="module" src="js/main.js"></script>
+</main>
 
+<!-- Player bar fissa -->
+<div id="playerBar">
+  <div id="nowPlayingTitle">Seleziona un brano</div>
+
+  <div class="progress-row">
+    <span class="time-label" id="timeCurrent">0:00</span>
+    <input type="range" id="seekSlider" value="0" max="100">
+    <span class="time-label" id="timeTotal">0:00</span>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn icon-btn" id="btnShuffle" aria-label="Shuffle"></button>
+    <button class="ctrl-btn icon-btn" id="btnPrev"    aria-label="Precedente"></button>
+    <button class="ctrl-btn btn-play" id="btnPlay"    aria-label="Play/Pausa"></button>
+    <button class="ctrl-btn icon-btn" id="btnNext"    aria-label="Successivo"></button>
+    <button class="ctrl-btn icon-btn" id="btnLoop"    aria-label="Loop"></button>
+  </div>
+</div>
+
+<!-- Elemento audio/video nascosto -->
+<video id="mediaEl" playsinline style="display:none"></video>
+
+<!-- Player espanso -->
+<div id="expandedPlayer">
+  <div id="visualContainer"></div>
+  <div id="ytWrapper">
+    <div id="ytPlayerEl"></div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
