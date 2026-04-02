@@ -1,75 +1,125 @@
-// js/ui/queueUI.js
-import { queue } from '../core/queue.js';
-import { play } from '../core/player.js';
-import { on } from '../core/events.js';
+// ── queueUI.js ───────────────────────────────────────────────────
+// Rendering DOM di coda e playlist salvate.
+// Logica pura in core/queue.js; questo modulo gestisce solo il DOM.
 
-const queueContainer = document.getElementById('queueList');
+import { store }       from '../core/store.js';
+import { escHtml, showToast } from '../utils.js';
+import {
+  removeFromQueue, reorderQueue,
+  loadPlaylists,
+  saveQueueAsPlaylist,
+  saveHistoryAsPlaylist,
+  loadPlaylistIntoQueue,
+  deletePlaylist,
+} from '../core/queue.js';
 
-/**
- * Renderizza la queue
- */
+/* ── DOM refs ───────────────────────────────────────────────────── */
+const queueListEl    = document.getElementById('queueList');
+const playlistListEl = document.getElementById('playlistList');
+const queueSection   = document.getElementById('queueSection');
+
+/* ═══════════════════════════════════════════════════════════════════
+   CODA
+   ═══════════════════════════════════════════════════════════════════ */
+
 export function renderQueue() {
-  if (!queueContainer) return;
+  queueListEl.innerHTML = '';
+  queueSection.hidden   = store.queue.length === 0;
 
-  queueContainer.innerHTML = '';
+  store.queue.forEach((item, i) => {
+    const div   = document.createElement('div');
+    const title = item.type === 'youtube' ? item.title : item.file.name;
 
-  queue.getAll().forEach((track, index) => {
-    const li = document.createElement('li');
-    li.classList.add('queue-item');
-    li.dataset.index = index;
+    div.dataset.dragItem = i;
+    div.innerHTML = `
+      <span style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:.85rem;">
+        ${escHtml(title)}
+      </span>
+      <div style="display:flex;gap:12px;margin-left:10px;align-items:center;">
+        <button data-rem="${i}" aria-label="Rimuovi">${_iconX()}</button>
+        <span class="drag-handle" data-drag="${i}" aria-label="Trascina per riordinare">☰</span>
+      </div>`;
 
-    li.innerHTML = `
-      <img class="cover" src="${track.cover || ''}" alt="cover">
-      <div class="info">
-        <div class="title">${track.title || 'Unknown'}</div>
-        <div class="duration">${track.duration ? formatTime(track.duration) : '--:--'}</div>
-      </div>
-      <button class="remove">×</button>
-    `;
-
-    // Play on click
-    li.addEventListener('click', (e) => {
-      if (e.target.classList.contains('remove')) return;
-      play(track);
-    });
-
-    // Remove from queue
-    li.querySelector('.remove').addEventListener('click', (e) => {
-      e.stopPropagation();
-      queue.remove(index);
-      renderQueue();
-    });
-
-    queueContainer.appendChild(li);
+    div.querySelector('[data-rem]').onclick = () => removeFromQueue(i);
+    queueListEl.appendChild(div);
   });
 }
 
-/**
- * Helper per convertire secondi in mm:ss
- */
-function formatTime(sec) {
-  const minutes = Math.floor(sec / 60);
-  const seconds = Math.floor(sec % 60).toString().padStart(2, '0');
-  return `${minutes}:${seconds}`;
+/* ── Drag & drop touch — listener delegati, registrati una sola volta */
+let _dragIdx = null;
+
+queueListEl.addEventListener('touchstart', e => {
+  const handle = e.target.closest('[data-drag]');
+  if (!handle) return;
+  _dragIdx = parseInt(handle.dataset.drag);
+  e.stopPropagation();
+}, { passive: false });
+
+queueListEl.addEventListener('touchmove', e => {
+  if (_dragIdx === null) return;
+  e.preventDefault();
+  const el = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY)
+               ?.closest('[data-drag-item]');
+  if (!el) return;
+  const overIdx = parseInt(el.dataset.dragItem);
+  if (overIdx !== _dragIdx) {
+    reorderQueue(_dragIdx, overIdx);
+    _dragIdx = overIdx;
+  }
+}, { passive: false });
+
+queueListEl.addEventListener('touchend', () => { _dragIdx = null; });
+
+/* ═══════════════════════════════════════════════════════════════════
+   SALVA CODA / CRONOLOGIA
+   ═══════════════════════════════════════════════════════════════════ */
+
+document.getElementById('saveQueueBtn').onclick = () => {
+  const name = prompt('Nome Playlist:', 'Playlist ' + new Date().toLocaleDateString());
+  if (name) saveQueueAsPlaylist(name);
+};
+
+document.getElementById('saveHistoryBtn').onclick = () => {
+  if (!store.playHistory.length || !store.sessionStart) return showToast('Vuota!');
+  const start = store.sessionStart;
+  const now   = new Date();
+  const _fmt  = d => `${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const date  = `${start.getDate()}/${start.getMonth()+1}/${String(start.getFullYear()).slice(-2)}`;
+  const name  = prompt(`Nome playlist: ${date} ${_fmt(start)} - ${_fmt(now)}`);
+  if (name) saveHistoryAsPlaylist(name);
+};
+
+/* ═══════════════════════════════════════════════════════════════════
+   PLAYLIST SALVATE
+   ═══════════════════════════════════════════════════════════════════ */
+
+export function renderPlaylists() {
+  playlistListEl.innerHTML = '';
+  const all = loadPlaylists();
+
+  Object.keys(all).forEach(name => {
+    const div = document.createElement('div');
+    div.innerHTML = `
+      <span style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:.85rem;">
+        ${escHtml(name)}
+      </span>
+      <div style="display:flex;gap:12px;margin-left:10px;align-items:center;">
+        <button data-del aria-label="Elimina">${_iconX()}</button>
+        <button data-load style="color:var(--accent);font-weight:700;font-size:.7rem;">CARICA</button>
+      </div>`;
+
+    div.querySelector('[data-load]').onclick = () => loadPlaylistIntoQueue(name);
+    div.querySelector('[data-del]').onclick  = () => {
+      if (confirm(`Eliminare "${name}"?`)) deletePlaylist(name);
+    };
+    playlistListEl.appendChild(div);
+  });
 }
 
-// --- Eventi per aggiornare queue dinamicamente ---
-on('queueUpdate', () => renderQueue());
-
-// --- Drag & Drop base (opzionale, da migliorare con librerie) ---
-queueContainer.addEventListener('dragstart', (e) => {
-  e.dataTransfer.setData('text/plain', e.target.dataset.index);
-});
-
-queueContainer.addEventListener('drop', (e) => {
-  e.preventDefault();
-  const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
-  const toIndex = parseInt(e.target.closest('li')?.dataset.index);
-
-  if (fromIndex != null && toIndex != null) {
-    queue.move(fromIndex, toIndex);
-    renderQueue();
-  }
-});
-
-queueContainer.addEventListener('dragover', (e) => e.preventDefault());
+/* ── Icona X SVG ────────────────────────────────────────────────── */
+function _iconX() {
+  return `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+    <line x1="2" y1="2" x2="14" y2="14" stroke="#ff4444" stroke-width="2" stroke-linecap="round"/>
+    <line x1="14" y1="2" x2="2"  y2="14" stroke="#ff4444" stroke-width="2" stroke-linecap="round"/>
+  </svg>`;
+}
