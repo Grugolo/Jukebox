@@ -1,57 +1,70 @@
-// ==============================
-// main.js
-// Entry point della pagina
-// ==============================
+// ── main.js ──────────────────────────────────────────────────────
+// Entry point. Importa i moduli e collega le interazioni globali
+// che non appartengono a nessun modulo specifico.
 
-// Import dei moduli core, controls e ui
-import { Library } from './core/library.js';
-import { ExpandedScreen } from './core/expandedScreen.js';
-import { SideMenu } from './ui/sideMenu.js';
-import { Gestures } from './controls/gestures.js';
+// Side-effect imports (registrano event listener all'import)
+import './modules/localFiles.js';
+import './ui/controls.js';
 
-// ==============================
-// INIZIALIZZAZIONE APP
-// ==============================
-document.addEventListener('DOMContentLoaded', () => {
+// Funzioni da usare in questo modulo
+import { updateUI }                         from './ui/controls.js';
+import { renderPlaylists, renderQueue }     from './ui/queueUI.js';
+import { setupExpandedSwipe, togglePlayer } from './ui/expandedPlayer.js';
+import { scheduleYTSearch }                 from './modules/youtube.js';
+import { playLocal }                        from './core/player.js';
 
-  // --- Core Modules ---
-  const library = new Library('.library-list');
-  const expanded = new ExpandedScreen('.expanded-screen');
+/* ── Barra di ricerca ───────────────────────────────────────────── */
+document.getElementById('searchInput').addEventListener('input', e => {
+  const val = e.target.value.toLowerCase();
 
-  // --- UI Modules ---
-  const sideMenu = new SideMenu('.side-menu');
-
-  // --- Controls / Event-driven ---
-  const gestures = new Gestures({
-    libraryScreen: '.library-screen',
-    expandedScreen: '.expanded-screen'
-  });
-
-  // ==============================
-  // EVENTI GLOBALI
-  // ==============================
-  
-  // Apri elemento in expanded screen
-  document.querySelectorAll('.library-list li').forEach(item => {
-    item.addEventListener('click', () => {
-      expanded.show(item.dataset.id); // mostro l'elemento selezionato
+  // Filtra tracce in libreria
+  document.querySelectorAll('.folder-group').forEach(group => {
+    let visible = false;
+    group.querySelectorAll('.track-item').forEach(item => {
+      const match = item.textContent.toLowerCase().includes(val);
+      item.style.display = match ? 'flex' : 'none';
+      if (match) visible = true;
     });
+    group.style.display = visible ? '' : 'none';
   });
 
-  // Torna alla library
-  document.querySelectorAll('.btn-back').forEach(btn => {
-    btn.addEventListener('click', () => {
-      expanded.hide();
-    });
-  });
+  // Ricerca YouTube (con debounce interno)
+  scheduleYTSearch(val);
+});
 
-  // Toggle side menu
-  document.querySelector('.btn-menu').addEventListener('click', () => {
-    sideMenu.toggle();
-  });
+/* ── Now-playing title: click → espandi; swipe → prev/next ─────── */
+const titleEl = document.getElementById('nowPlayingTitle');
+titleEl.addEventListener('click', () => togglePlayer(true));
 
-  // Inizializzo gestures
-  gestures.init();
+let _sx = 0, _sy = 0;
+titleEl.addEventListener('touchstart', e => {
+  _sx = e.touches[0].clientX;
+  _sy = e.touches[0].clientY;
+}, { passive: true });
 
-  console.log('App inizializzata ✅');
+titleEl.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - _sx;
+  const dy = e.changedTouches[0].clientY - _sy;
+  const T  = 50;
+  if (Math.abs(dx) > Math.abs(dy)) {
+    if (dx < -T) document.getElementById('btnNext').click();
+    if (dx >  T) document.getElementById('btnPrev').click();
+  } else {
+    if (dy < -T) togglePlayer(true);
+    if (dy >  T) togglePlayer(false);
+  }
+}, { passive: true });
+
+/* ── Globali per eventuale uso futuro da console / estensioni ────── */
+window._playLocal   = playLocal;
+window.togglePlayer = togglePlayer;
+
+/* ── Inizializzazione ───────────────────────────────────────────── */
+// type=module garantisce esecuzione dopo il parsing del DOM,
+// ma window.load assicura che tutte le risorse siano pronte.
+window.addEventListener('load', () => {
+  updateUI();
+  renderQueue();
+  renderPlaylists();
+  setupExpandedSwipe();
 });
