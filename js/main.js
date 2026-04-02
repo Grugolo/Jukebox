@@ -14,8 +14,13 @@ import { scheduleYTSearch }                 from './modules/youtube.js';
 import { playLocal }                        from './core/player.js';
 
 /* ── Barra di ricerca ───────────────────────────────────────────── */
-document.getElementById('searchInput').addEventListener('input', e => {
+const searchInput = document.getElementById('searchInput');
+const clearBtn    = document.getElementById('clearSearchBtn');
+
+searchInput.addEventListener('input', e => {
   const val = e.target.value.toLowerCase();
+
+  clearBtn.classList.toggle('active', val.length > 0);
 
   // Filtra tracce in libreria
   document.querySelectorAll('.folder-group').forEach(group => {
@@ -31,6 +36,12 @@ document.getElementById('searchInput').addEventListener('input', e => {
   // Ricerca YouTube (con debounce interno)
   scheduleYTSearch(val);
 });
+
+clearBtn.onclick = () => {
+  searchInput.value = '';
+  searchInput.dispatchEvent(new Event('input'));
+  searchInput.focus();
+};
 
 /* ── Now-playing title: click → espandi; swipe → prev/next ─────── */
 const titleEl = document.getElementById('nowPlayingTitle');
