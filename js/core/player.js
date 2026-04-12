@@ -5,6 +5,7 @@
 import { store }       from './store.js';
 import { formatTime }  from '../utils.js';
 import { emit, EV }    from './events.js';
+import { saveState }   from './persist.js';
 
 export const mediaEl = document.getElementById('mediaEl');
 
@@ -14,6 +15,29 @@ const timeTotal   = document.getElementById('timeTotal');
 const titleEl     = document.getElementById('nowPlayingTitle');
 
 let _currentObjectURL = null;
+
+/* ── Audio silenzioso: ancora MediaSession per Android/Brave ────────
+   Android mostra prev/next solo se un <audio> nativo sta suonando.
+   Usiamo un file WAV inline (44 byte, silenzio) in loop continuo
+   mentre YT è attivo, così il browser "vede" un media element vivo.  */
+const _SILENT_WAV = 'data:audio/wav;base64,'
+  + 'UklGRiQAAABXQVZFZm10IBAAAA'
+  + 'EAAQAAgD4AAAB9AAACABAA'
+  + 'ZGF0YQAAAAA=';
+
+const _silentEl = new Audio();
+_silentEl.src    = _SILENT_WAV;
+_silentEl.loop   = true;
+_silentEl.volume = 0;
+
+// FIX BUG 1: registra i MediaSession handler anche sul silentEl
+// così Android/Brave li vede quando il silentEl è il media attivo
+function _silentPlay() {
+  _silentEl.play().catch(() => {});
+  // Ri-binda i handler DOPO il play (alcuni browser li resettano)
+  _bindMediaSession();
+}
+function _silentStop()  { _silentEl.pause(); _silentEl.currentTime = 0; }
 
 /* ═══════════════════════════════════════════════════════════════════
    LOCALE
@@ -27,16 +51,23 @@ let _currentObjectURL = null;
 export function playLocal(idx, { addHistory = true, fromBack = false } = {}) {
   if (idx < 0 || idx >= store.playlist.length) return;
 
-  if (addHistory && !fromBack && store.currentIdx !== -1 && store.currentIdx !== idx) {
-    store.playHistory.push(store.currentIdx);
+  if (addHistory && !fromBack && (store.currentIdx !== -1 || store.currentYTId)) {
+    // FIX BUG 2: salva in cronologia anche i brani YT precedenti
+    if (store.currentYTId && store.currentYTItem) {
+      store.playHistory.push({ yt: true, ...store.currentYTItem });
+    } else if (store.currentIdx !== -1 && store.currentIdx !== idx) {
+      store.playHistory.push(store.currentIdx);
+    }
   }
 
   store.currentYTId   = null;
+  store.currentYTItem = null;
   store.currentIdx    = idx;
   store.lastManualIdx = idx;
 
-  // Ferma YT
+  // Ferma YT e silent anchor
   _ytStop();
+  _silentStop();
   emit(EV.YT_STOPPED);
   _ytWrapperVisible(false);
 
@@ -53,6 +84,7 @@ export function playLocal(idx, { addHistory = true, fromBack = false } = {}) {
   timeTotal.textContent       = '0:00';
 
   emit(EV.PLAYER_CHANGE);
+  saveState();
   emit(EV.VISUAL_UPDATE);
   _mediaSessionLocal(track, titleEl.textContent);
 }
@@ -66,6 +98,13 @@ export function playLocal(idx, { addHistory = true, fromBack = false } = {}) {
  * @param {{ id: string, title: string, thumb?: string, uploader?: string }} item
  */
 export function playYT(item) {
+  // FIX BUG 2: salva in cronologia il brano precedente (locale o YT)
+  if (store.currentYTId && store.currentYTItem && store.currentYTId !== item.id) {
+    store.playHistory.push({ yt: true, ...store.currentYTItem });
+  } else if (!store.currentYTId && store.currentIdx !== -1) {
+    store.playHistory.push(store.currentIdx);
+  }
+
   // Ferma locale e libera URL
   mediaEl.pause();
   if (_currentObjectURL) {
@@ -77,7 +116,9 @@ export function playYT(item) {
 
   emit(EV.YT_STOPPED); // ferma poll seekbar
 
-  store.currentYTId = item.id;
+  store.currentYTId   = item.id;
+  store.currentYTItem = item;  // FIX BUG 2: salva riferimento completo
+  store.currentIdx    = -1;
   titleEl.textContent = item.title;
 
   _ytWrapperVisible(true);
@@ -90,8 +131,11 @@ export function playYT(item) {
   }
 
   emit(EV.PLAYER_CHANGE);
+  saveState();
   emit(EV.VISUAL_UPDATE);
   _mediaSessionYT(item);
+  // Avvia il silent anchor subito; verrà ripetuto anche su onStateChange
+  _silentPlay();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -120,11 +164,32 @@ export function seek(pct) {
 }
 
 export function playNext() {
-  // Prima controlla la coda (import dinamico per evitare circolare queue→player→queue)
   import('./queue.js').then(({ dequeueNext }) => {
     if (dequeueNext()) return;
-    if (store.currentYTId) return; // YT: gestito da onStateChange
 
+    // FIX BUG 3: gestisci loop per YT
+    if (store.currentYTId) {
+      if (store.looping && store.ytReady && store.ytPlayer) {
+        try { store.ytPlayer.seekTo(0); store.ytPlayer.playVideo(); } catch (_) {}
+        return;
+      }
+      // FIX BUG 3: gestisci shuffle per YT (scorre i risultati YT visibili)
+      if (store.shuffle && store.ytResults.length > 1) {
+        const curIdx = store.ytResults.findIndex(r => r.id === store.currentYTId);
+        let rndIdx;
+        do { rndIdx = Math.floor(Math.random() * store.ytResults.length); }
+        while (rndIdx === curIdx && store.ytResults.length > 1);
+        playYT(store.ytResults[rndIdx]);
+        return;
+      }
+      // Avanza ai risultati YT in sequenza
+      const curIdx = store.ytResults.findIndex(r => r.id === store.currentYTId);
+      const nxt = curIdx + 1;
+      if (nxt < store.ytResults.length) playYT(store.ytResults[nxt]);
+      return;
+    }
+
+    // Locale
     let next = store.currentIdx + 1;
     if (store.shuffle && store.shuffleOrder.length) {
       const curPos = store.shuffleOrder.indexOf(store.currentIdx);
@@ -141,11 +206,30 @@ export function playPrev() {
     return;
   }
   if (store.playHistory.length) {
-    playLocal(store.playHistory.pop(), { addHistory: false, fromBack: true });
+    const prev = store.playHistory.pop();
+    // FIX BUG 2: gestisci entry YT nella cronologia
+    if (prev && typeof prev === 'object' && prev.yt) {
+      // Riproduci senza aggiungere nuovamente alla cronologia
+      const item = { id: prev.id, title: prev.title, thumb: prev.thumb, uploader: prev.uploader };
+      // Reset cronologia temporaneamente per evitare push duplicato
+      const tmpYTId = store.currentYTId;
+      store.currentYTId = null;
+      store.currentIdx  = -1;
+      playYT(item);
+      // Annulla il push automatico appena fatto da playYT
+      // (playYT vede currentYTId=null e currentIdx=-1, non pusha nulla)
+      return;
+    }
+    playLocal(prev, { addHistory: false, fromBack: true });
     return;
   }
   if (!store.currentYTId && store.currentIdx > 0) {
     playLocal(store.currentIdx - 1);
+  }
+  // FIX BUG 3: prev per YT → torna al risultato precedente
+  if (store.currentYTId && store.ytResults.length > 1) {
+    const curIdx = store.ytResults.findIndex(r => r.id === store.currentYTId);
+    if (curIdx > 0) playYT(store.ytResults[curIdx - 1]);
   }
 }
 
@@ -153,11 +237,18 @@ export function playPrev() {
    EVENTI MEDIA ELEMENT
    ═══════════════════════════════════════════════════════════════════ */
 
+let _saveTimer = null;
 mediaEl.ontimeupdate = () => {
   if (!mediaEl.duration) return;
   seekSlider.value        = (mediaEl.currentTime / mediaEl.duration) * 100;
   timeCurrent.textContent = formatTime(mediaEl.currentTime);
   timeTotal.textContent   = formatTime(mediaEl.duration);
+  if (!_saveTimer) {
+    _saveTimer = setTimeout(() => {
+      saveState();
+      _saveTimer = null;
+    }, 1000);
+  }
 };
 
 mediaEl.onplay  = () => emit(EV.PLAYER_CHANGE);
@@ -186,9 +277,28 @@ window.onYouTubeIframeAPIReady = () => {
         }
       },
       onStateChange: (e) => {
-        if (e.data === YT.PlayerState.PLAYING) emit(EV.YT_PLAYING);
-        if (e.data === YT.PlayerState.PAUSED)  emit(EV.YT_STOPPED);
-        if (e.data === YT.PlayerState.ENDED)   playNext();
+        if (e.data === YT.PlayerState.PLAYING) {
+          emit(EV.YT_PLAYING);
+          _silentPlay(); // FIX BUG 1: re-binda MediaSession ad ogni play
+          if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'playing';
+          }
+        }
+        if (e.data === YT.PlayerState.PAUSED) {
+          emit(EV.YT_STOPPED);
+          _silentStop();
+          if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = 'paused';
+          }
+        }
+        // FIX BUG 3: loop YT gestito qui
+        if (e.data === YT.PlayerState.ENDED) {
+          if (store.looping && store.ytReady && store.ytPlayer) {
+            try { store.ytPlayer.seekTo(0); store.ytPlayer.playVideo(); } catch (_) {}
+          } else {
+            playNext();
+          }
+        }
         emit(EV.PLAYER_CHANGE);
       },
     },
@@ -228,6 +338,7 @@ function _mediaSessionLocal(track, title) {
     artist:  track.folder.split('/').pop(),
     artwork: [{ src: track.cover || 'https://placehold.co/512x512', sizes: '512x512', type: 'image/png' }],
   });
+  navigator.mediaSession.playbackState = 'playing';
   _bindMediaSession();
 }
 
@@ -238,6 +349,7 @@ function _mediaSessionYT(item) {
     artist:  item.uploader || 'YouTube',
     artwork: [{ src: item.thumb || '', sizes: '512x512', type: 'image/jpeg' }],
   });
+  navigator.mediaSession.playbackState = 'playing';
   _bindMediaSession();
 }
 

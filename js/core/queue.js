@@ -4,6 +4,7 @@
 
 import { store }     from './store.js';
 import { showToast } from '../utils.js';
+import { saveState } from './persist.js';
 
 const LS_KEY = 'f_p';
 
@@ -17,6 +18,7 @@ export function enqueue(item, top = false) {
   showToast(top ? 'In cima ↑' : 'In fondo ↓');
   if (navigator.vibrate) navigator.vibrate(30);
   _refreshQueueUI();
+  saveState();
 }
 
 /**
@@ -35,12 +37,14 @@ export function dequeueNext() {
       if (idx !== -1) playLocal(idx);
     }
   });
+  saveState();
   return true;
 }
 
 export function removeFromQueue(i) {
   store.queue.splice(i, 1);
   _refreshQueueUI();
+  saveState();
 }
 
 export function reorderQueue(from, to) {
@@ -48,6 +52,7 @@ export function reorderQueue(from, to) {
   const [item] = store.queue.splice(from, 1);
   store.queue.splice(to, 0, item);
   _refreshQueueUI();
+  saveState();
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -70,11 +75,31 @@ export function saveQueueAsPlaylist(name) {
 export function saveHistoryAsPlaylist(name) {
   if (!name?.trim()) return;
   if (!store.playHistory.length) { showToast('Vuota!'); return; }
+
   const all = loadPlaylists();
+
+  // FIX BUG 2: gestisci sia entry numeriche (locale) che oggetti YT
   all[name] = store.playHistory
-    .map(idx => store.playlist[idx])
-    .filter(Boolean)
-    .map(_serialize);
+    .map(entry => {
+      if (entry && typeof entry === 'object' && entry.yt) {
+        // Entrata YT nella cronologia
+        return { yt: true, id: entry.id, title: entry.title };
+      }
+      // Entrata locale (indice numerico)
+      const track = store.playlist[entry];
+      if (!track) return null;
+      return { n: track.file.name, f: track.folder };
+    })
+    .filter(Boolean);
+
+  // Aggiungi anche il brano corrente alla cronologia salvata
+  if (store.currentYTId && store.currentYTItem) {
+    all[name].push({ yt: true, id: store.currentYTId, title: store.currentYTItem.title });
+  } else if (store.currentIdx !== -1 && store.playlist[store.currentIdx]) {
+    const cur = store.playlist[store.currentIdx];
+    all[name].push({ n: cur.file.name, f: cur.folder });
+  }
+
   localStorage.setItem(LS_KEY, JSON.stringify(all));
   _refreshPlaylistUI();
   showToast('Cronologia salvata');
