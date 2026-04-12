@@ -1,18 +1,10 @@
 // ── queue.js ─────────────────────────────────────────────────────
-// Logica pura della coda e delle playlist (localStorage).
-// Non tocca il DOM — delega a ui/queueUI.js tramite import dinamico.
-
 import { store }     from './store.js';
 import { showToast } from '../utils.js';
 import { saveState } from './persist.js';
 
 const LS_KEY = 'f_p';
 
-/* ═══════════════════════════════════════════════════════════════════
-   CODA
-   ═══════════════════════════════════════════════════════════════════ */
-
-/** Aggiunge un item in cima (top=true) o in fondo alla coda */
 export function enqueue(item, top = false) {
   top ? store.queue.unshift(item) : store.queue.push(item);
   showToast(top ? 'In cima ↑' : 'In fondo ↓');
@@ -21,10 +13,6 @@ export function enqueue(item, top = false) {
   saveState();
 }
 
-/**
- * Preleva il primo item della coda e lo riproduce.
- * @returns {boolean} true se ha trovato un item, false se coda vuota
- */
 export function dequeueNext() {
   if (!store.queue.length) return false;
   const item = store.queue.shift();
@@ -55,10 +43,6 @@ export function reorderQueue(from, to) {
   saveState();
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   PLAYLIST (localStorage)
-   ═══════════════════════════════════════════════════════════════════ */
-
 export function loadPlaylists() {
   try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; }
   catch { return {}; }
@@ -74,32 +58,31 @@ export function saveQueueAsPlaylist(name) {
 
 export function saveHistoryAsPlaylist(name) {
   if (!name?.trim()) return;
-  if (!store.playHistory.length) { showToast('Vuota!'); return; }
 
-  const all = loadPlaylists();
-
-  // FIX BUG 2: gestisci sia entry numeriche (locale) che oggetti YT
-  all[name] = store.playHistory
+  // FIX: costruisce la lista includendo sia entry numeriche (locale)
+  // che oggetti YT {yt, id, title} presenti in playHistory
+  const entries = store.playHistory
     .map(entry => {
       if (entry && typeof entry === 'object' && entry.yt) {
-        // Entrata YT nella cronologia
         return { yt: true, id: entry.id, title: entry.title };
       }
-      // Entrata locale (indice numerico)
       const track = store.playlist[entry];
-      if (!track) return null;
-      return { n: track.file.name, f: track.folder };
+      return track ? { n: track.file.name, f: track.folder } : null;
     })
     .filter(Boolean);
 
-  // Aggiungi anche il brano corrente alla cronologia salvata
+  // Aggiunge anche il brano corrente
   if (store.currentYTId && store.currentYTItem) {
-    all[name].push({ yt: true, id: store.currentYTId, title: store.currentYTItem.title });
+    entries.push({ yt: true, id: store.currentYTId, title: store.currentYTItem.title });
   } else if (store.currentIdx !== -1 && store.playlist[store.currentIdx]) {
     const cur = store.playlist[store.currentIdx];
-    all[name].push({ n: cur.file.name, f: cur.folder });
+    entries.push({ n: cur.file.name, f: cur.folder });
   }
 
+  if (!entries.length) { showToast('Vuota!'); return; }
+
+  const all = loadPlaylists();
+  all[name] = entries;
   localStorage.setItem(LS_KEY, JSON.stringify(all));
   _refreshPlaylistUI();
   showToast('Cronologia salvata');
@@ -132,15 +115,10 @@ export function deletePlaylist(name) {
   _refreshPlaylistUI();
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   HELPERS PRIVATI
-   ═══════════════════════════════════════════════════════════════════ */
-
 function _serialize(item) {
   if (item?.type === 'youtube') return { yt: true, id: item.id, title: item.title };
   return { n: item.file.name, f: item.folder };
 }
 
-// Import dinamici per evitare circolari (queue ↔ player ↔ queue)
 function _refreshQueueUI()    { import('../ui/queueUI.js').then(m => m.renderQueue()); }
 function _refreshPlaylistUI() { import('../ui/queueUI.js').then(m => m.renderPlaylists()); }
