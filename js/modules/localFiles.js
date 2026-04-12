@@ -1,10 +1,10 @@
 // ── localFiles.js ────────────────────────────────────────────────
 // Caricamento cartella, estrazione cover/durata, creazione track item DOM.
 
-import { store }    from '../core/store.js';
-import { playLocal } from '../core/player.js';
-import { enqueue }   from '../core/queue.js';
-import { escHtml }   from '../utils.js';
+import { store }                 from '../core/store.js';
+import { playLocal }             from '../core/player.js';
+import { enqueue }               from '../core/queue.js';
+import { escHtml, decodeHtml }   from '../utils.js';
 
 const libraryEl = document.getElementById('library');
 const input     = document.getElementById('folderInput');
@@ -61,26 +61,49 @@ export function makeTrackEl(item, path, idx, isYT = false) {
   el.className   = 'track-item';
   el.dataset.idx = idx;
   if (isYT) el.dataset.ytIdx = idx;
+  const cover = document.createElement('div');
+  cover.className = 'track-cover';
+  cover.id = `cov-${idx}`;
 
-  const title    = isYT ? item.title    : item.name.replace(/\.[^/.]+$/, '');
-  const subtitle = isYT ? (item.uploader || 'YouTube') : (path.split('/').pop() || path);
-  const ext      = isYT ? 'YT'          : item.name.split('.').pop().toUpperCase();
+  if (isYT) {
+    cover.innerHTML = item.thumb
+      ? `<img src="${item.thumb}" alt="">`
+      : '▶️';
+  }
+
+  const title    = isYT ? decodeHtml(item.title)  : item.name.replace(/\.[^/.]+$/, '');
+  const subtitle = isYT ? decodeHtml(item.uploader || 'YouTube') : (path.split('/').pop() || path);
+  const ext      = isYT ? 'YT' : item.name.split('.').pop().toUpperCase();
   const durText  = isYT && item.duration
     ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2,'0')}`
     : '';
 
-  el.innerHTML = `
-    <div class="track-cover" id="cov-${isYT ? 'yt' : ''}${idx}">
-      ${isYT ? `<img src="${escHtml(item.thumb)}" alt="">` : '🎵'}
-    </div>
-    <div class="track-info">
-      <span class="track-name">${escHtml(title)}</span>
-      <div class="track-meta-row">
-        <span>${escHtml(subtitle)}</span>
-        <span class="file-format ${isYT ? 'yt' : ''}">${ext}</span>
-        <span style="color:var(--accent);font-weight:700;" id="dur-${isYT ? 'yt' : ''}${idx}">${durText}</span>
-      </div>
-    </div>`;
+  const info = document.createElement('div');
+  info.className = 'track-info';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'track-name';
+  nameEl.textContent = title;
+
+  const meta = document.createElement('div');
+  meta.className = 'track-meta-row';
+
+  const sub = document.createElement('span');
+  sub.textContent = subtitle;
+
+  const format = document.createElement('span');
+  format.className = 'file-format' + (isYT ? ' yt' : '');
+  format.textContent = ext;
+
+  const dur = document.createElement('span');
+  dur.id = `dur-${isYT ? 'yt' : ''}${idx}`;
+  dur.style.color = 'var(--accent)';
+  dur.style.fontWeight = '700';
+  dur.textContent = durText;
+
+  meta.append(sub, format, dur);
+  info.append(nameEl, meta);
+  el.append(cover, info);
 
   // Click su track-info → riproduci
   el.querySelector('.track-info').addEventListener('click', () => {
