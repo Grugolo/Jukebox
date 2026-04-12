@@ -16,6 +16,13 @@ export function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+/** Decode HTML per visualizzare correttamente tutti i caratteri */
+export function decodeHtml(str) {
+  const txt = document.createElement('textarea');
+  txt.innerHTML = str;
+  return txt.value;
+}
+
 /** Toast centrato, auto-dismiss dopo 800 ms */
 export function showToast(msg) {
   const el = document.createElement('div');

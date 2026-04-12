@@ -11,7 +11,9 @@ import { updateUI }                         from './ui/controls.js';
 import { renderPlaylists, renderQueue }     from './ui/queueUI.js';
 import { setupExpandedSwipe, togglePlayer } from './ui/expandedPlayer.js';
 import { scheduleYTSearch }                 from './modules/youtube.js';
-import { playLocal }                        from './core/player.js';
+import { loadState }                        from './core/persist.js';
+import { playLocal, playYT }                from './core/player.js';
+import { store }                            from './core/store.js';
 
 /* ── Barra di ricerca ───────────────────────────────────────────── */
 const searchInput = document.getElementById('searchInput');
@@ -22,18 +24,21 @@ searchInput.addEventListener('input', e => {
 
   clearBtn.classList.toggle('active', val.length > 0);
 
-  // Filtra tracce in libreria
-  document.querySelectorAll('.folder-group').forEach(group => {
+  // FIX BUG 1: escludi il gruppo YT ([data-yt-group]) dal filtro locale —
+  // la sua visibilità è gestita interamente da youtube.js
+  document.querySelectorAll('.folder-group:not([data-yt-group])').forEach(group => {
     let visible = false;
+
     group.querySelectorAll('.track-item').forEach(item => {
-      const match = item.textContent.toLowerCase().includes(val);
+      const text = item.querySelector('.track-name')?.textContent || '';
+      const match = text.toLowerCase().includes(val);
       item.style.display = match ? 'flex' : 'none';
       if (match) visible = true;
     });
+
     group.style.display = visible ? '' : 'none';
   });
 
-  // Ricerca YouTube (con debounce interno)
   scheduleYTSearch(val);
 });
 
@@ -71,12 +76,42 @@ window._playLocal   = playLocal;
 window.togglePlayer = togglePlayer;
 
 /* ── Inizializzazione ───────────────────────────────────────────── */
-// type=module garantisce esecuzione dopo il parsing del DOM,
-// ma window.load assicura che tutte le risorse siano pronte.
 window.addEventListener('load', () => {
   updateUI();
   renderQueue();
   renderPlaylists();
   setupExpandedSwipe();
-});
 
+  const state = loadState();
+
+  if (state) {
+    // ripristina coda
+    state.queue.forEach(item => {
+      if (item.yt) {
+        store.queue.push({
+          type: 'youtube',
+          id: item.id,
+          title: item.title,
+          thumb: `https://img.youtube.com/vi/${item.id}/mqdefault.jpg`,
+        });
+      }
+    });
+
+    // ripristina YT
+    if (state.current?.ytId) {
+      playYT({
+        id: state.current.ytId,
+        title: state.current.title || 'YouTube'
+      });
+
+      setTimeout(() => {
+        try {
+          store.ytPlayer.seekTo(state.current.time || 0);
+          if (state.current.paused) store.ytPlayer.pauseVideo();
+        } catch {}
+      }, 1000);
+    }
+
+    renderQueue();
+  }
+});
