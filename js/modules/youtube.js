@@ -6,8 +6,8 @@ import { store }                             from '../core/store.js';
 import { playYT }                            from '../core/player.js';
 import { makeTrackEl }                       from './localFiles.js';
 import { parseISO8601, escHtml, decodeHtml } from '../utils.js';
-  
-let ytGroup = null;
+
+let ytGroup    = null;
 let ytTracksEl = null;
 let _lastReqId = 0;
 
@@ -32,7 +32,6 @@ export function playYTItem(item) {
 async function _search(q) {
   const reqId = ++_lastReqId;
   if (!q || q.length < 2) {
-    // FIX BUG 1: ripristina visibilità del gruppo YT quando la query è vuota
     if (ytGroup) ytGroup.style.display = 'none';
     if (ytTracksEl) {
       ytTracksEl.innerHTML = `<div style="color:var(--text-dim);padding:10px;">Cerca su YouTube</div>`;
@@ -42,11 +41,10 @@ async function _search(q) {
   }
 
   _ensureYTFolder();
-  // Assicura che il gruppo sia visibile quando si cerca
   ytGroup.style.display = '';
-  ytTracksEl.innerHTML = _skeletonHTML();
-  ytTracksEl.hidden = false;
-  
+  ytTracksEl.innerHTML  = _skeletonHTML();
+  ytTracksEl.hidden     = false;
+
   try {
     // 1. Search
     const searchRes  = await fetch(
@@ -75,14 +73,15 @@ async function _search(q) {
     );
 
     store.ytResults = items.map(item => ({
-      type:     'youtube',
-      id:       item.id.videoId,
-      title:    decodeHtml(item.snippet.title),
-      thumb:    item.snippet.thumbnails?.medium?.url || '',
-      duration: durationMap[item.id.videoId] || 0,
-      uploader: decodeHtml(item.snippet.channelTitle || 'YouTube'),
+      type:        'youtube',
+      id:          item.id.videoId,
+      title:       decodeHtml(item.snippet.title),
+      thumb:       item.snippet.thumbnails?.medium?.url || '',
+      duration:    durationMap[item.id.videoId] || 0,
+      uploader:    decodeHtml(item.snippet.channelTitle || 'YouTube'),
+      publishedAt: item.snippet.publishedAt || null,
     }));
-    
+
     if (reqId !== _lastReqId) return;
     _renderResults(store.ytResults);
 
@@ -99,9 +98,8 @@ async function _search(q) {
 function _ensureYTFolder() {
   const library = document.getElementById('library');
 
-  // se esiste ma NON è più nel DOM → reset
   if (ytGroup && !library.contains(ytGroup)) {
-    ytGroup = null;
+    ytGroup    = null;
     ytTracksEl = null;
   }
 
@@ -109,13 +107,11 @@ function _ensureYTFolder() {
 
   ytGroup = document.createElement('div');
   ytGroup.className = 'folder-group';
-  // FIX BUG 1: marca il gruppo YT così il filtro locale lo ignora
   ytGroup.dataset.ytGroup = '1';
-  // Nascosto di default finché non c'è una query attiva
-  ytGroup.style.display = 'none';
+  ytGroup.style.display   = 'none';
 
   const header = document.createElement('div');
-  header.className = 'folder-name';
+  header.className   = 'folder-name';
   header.textContent = '🌐 YouTube';
 
   ytTracksEl = document.createElement('div');
@@ -146,7 +142,6 @@ function _highlight(videoId) {
   });
 }
 
-/* ── Skeleton loader ────────────────────────────────────────────── */
 function _skeletonHTML() {
   const row = `
     <div class="skeleton-item">
