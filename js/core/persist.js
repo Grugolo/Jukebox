@@ -54,3 +54,4 @@ function _isPaused() {
   }
   return media.paused;
 }
+
