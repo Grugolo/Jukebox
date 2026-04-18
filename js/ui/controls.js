@@ -1,14 +1,11 @@
 // ── controls.js ──────────────────────────────────────────────────
 // Player bar UI: icone SVG, event listener pulsanti, updateUI.
-// Ascolta eventi dal bus invece di importare direttamente player.js
-// (evita il ciclo: player → controls → player).
 
-import { store }                              from '../core/store.js';
-import { on, EV }                             from '../core/events.js';
-import { mediaEl, togglePlay, playNext, playPrev, seek } from '../core/player.js';
+import { store }                                                    from '../core/store.js';
+import { on, EV }                                                   from '../core/events.js';
+import { mediaEl, togglePlay, playNext, playPrev, seek }            from '../core/player.js';
 
 /* ── SVG Icons ──────────────────────────────────────────────────── */
-// Tutti inline per evitare richieste HTTP extra e semplificare il deploy.
 const ICONS = {
   play:  `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#000" d="M8 5v14l11-7z"/></svg>`,
   pause: `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#000" d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`,
@@ -52,12 +49,30 @@ btnShuffle.onclick = () => {
   updateUI();
 };
 
+/* ── Poll icona play/pausa per YT ───────────────────────────────
+   onStateChange non è affidabile su Brave/Android (a volte non
+   si triggera su PAUSED). Polliamo lo stato ogni 500ms quando
+   YT è attivo e aggiorniamo solo l'icona se è cambiata.        */
+let _lastPlayState = null;
+setInterval(() => {
+  if (!store.currentYTId || !store.ytReady || !store.ytPlayer) return;
+  let nowPlaying = false;
+  try { nowPlaying = store.ytPlayer.getPlayerState() === YT.PlayerState.PLAYING; } catch { return; }
+  if (nowPlaying !== _lastPlayState) {
+    _lastPlayState = nowPlaying;
+    btnPlay.innerHTML = nowPlaying ? ICONS.pause : ICONS.play;
+  }
+}, 500);
+
 /* ── Ascolta eventi del bus ─────────────────────────────────────── */
 on(EV.PLAYER_CHANGE, () => updateUI());
+on(EV.PLAYER_CHANGE, ({ playing } = {}) => updateUI(playing));
 
 /* ── updateUI ───────────────────────────────────────────────────── */
-export function updateUI() {
-  const playing = _isPlaying();
+// playingOverride: se definito (solo per YT), usa quel valore invece
+// di interrogare getPlayerState() che potrebbe essere in race.
+export function updateUI(playingOverride) {
+  const playing = (playingOverride !== undefined) ? playingOverride : _isPlaying();
 
   btnPlay.innerHTML    = playing ? ICONS.pause : ICONS.play;
   btnNext.innerHTML    = ICONS.next;
