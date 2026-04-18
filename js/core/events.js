@@ -16,4 +16,5 @@ export const EV = {
   VISUAL_UPDATE:  'visual:update',
   YT_PLAYING:     'yt:playing',
   YT_STOPPED:     'yt:stopped',
+  QUEUE_CHANGE:   'queue:change',   // nuovo: aggiorna titolo coda
 };
