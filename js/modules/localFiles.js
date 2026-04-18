@@ -1,29 +1,45 @@
 // ── localFiles.js ────────────────────────────────────────────────
-// Caricamento cartella, estrazione cover/durata, creazione track item DOM.
+// Caricamento cartella / file singoli, estrazione cover/durata, track item DOM.
 
-import { store }                 from '../core/store.js';
-import { playLocal }             from '../core/player.js';
-import { enqueue }               from '../core/queue.js';
-import { escHtml, decodeHtml }   from '../utils.js';
+import { store }                      from '../core/store.js';
+import { playLocal }                  from '../core/player.js';
+import { enqueue, importPlaylistFromLines } from '../core/queue.js';
+import { escHtml, decodeHtml, fmtDateShort } from '../utils.js';
 
 const libraryEl = document.getElementById('library');
 const input     = document.getElementById('folderInput');
 
 /* ═══════════════════════════════════════════════════════════════════
-   CARICAMENTO CARTELLA
+   CARICAMENTO FILE / CARTELLA
    ═══════════════════════════════════════════════════════════════════ */
 
-input.onchange = (e) => {
+input.onchange = async (e) => {
   if (!store.sessionStart) store.sessionStart = new Date();
 
-  const files = [...e.target.files].filter(
+  const allFiles = [...e.target.files];
+
+  // Separa media da file testuali
+  const mediaFiles = allFiles.filter(
     f => f.type.startsWith('audio/') || f.type.startsWith('video/')
   );
+  const textFiles = allFiles.filter(
+    f => f.type === 'text/plain' || f.name.toLowerCase().endsWith('.txt')
+  );
 
-  // Raggruppa per cartella
+  // ── Importa playlist testuali ────────────────────────────────
+  for (const tf of textFiles) {
+    const text  = await tf.text();
+    const lines = text.split('\n');
+    const name  = tf.name.replace(/\.txt$/i, '');
+    await importPlaylistFromLines(name, lines);
+  }
+
+  if (!mediaFiles.length) return;
+
+  // ── Raggruppa media per cartella ─────────────────────────────
   const folders = {};
-  files.forEach(f => {
-    const parts = f.webkitRelativePath.split('/');
+  mediaFiles.forEach(f => {
+    const parts = f.webkitRelativePath ? f.webkitRelativePath.split('/') : [f.name];
     parts.pop();
     const path = parts.join('/') || 'Root';
     (folders[path] ??= []).push(f);
@@ -46,7 +62,7 @@ input.onchange = (e) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════
-   TRACK ITEM DOM  (usato anche da youtube.js per i risultati YT)
+   TRACK ITEM DOM
    ═══════════════════════════════════════════════════════════════════ */
 
 /**
@@ -61,6 +77,7 @@ export function makeTrackEl(item, path, idx, isYT = false) {
   el.className   = 'track-item';
   el.dataset.idx = idx;
   if (isYT) el.dataset.ytIdx = idx;
+
   const cover = document.createElement('div');
   cover.className = 'track-cover';
   cover.id = `cov-${idx}`;
@@ -77,6 +94,9 @@ export function makeTrackEl(item, path, idx, isYT = false) {
   const durText  = isYT && item.duration
     ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2,'0')}`
     : '';
+
+  // Data pubblicazione YT
+  const pubDate  = isYT && item.publishedAt ? fmtDateShort(item.publishedAt) : '';
 
   const info = document.createElement('div');
   info.className = 'track-info';
@@ -95,13 +115,23 @@ export function makeTrackEl(item, path, idx, isYT = false) {
   format.className = 'file-format' + (isYT ? ' yt' : '');
   format.textContent = ext;
 
+  // Data (solo YT, subito dopo il tag)
+  if (isYT && pubDate) {
+    const dateEl = document.createElement('span');
+    dateEl.className = 'pub-date';
+    dateEl.textContent = pubDate;
+    meta.append(sub, format, dateEl);
+  } else {
+    meta.append(sub, format);
+  }
+
   const dur = document.createElement('span');
   dur.id = `dur-${isYT ? 'yt' : ''}${idx}`;
   dur.style.color = 'var(--accent)';
   dur.style.fontWeight = '700';
   dur.textContent = durText;
+  meta.append(dur);
 
-  meta.append(sub, format, dur);
   info.append(nameEl, meta);
   el.append(cover, info);
 
@@ -136,7 +166,6 @@ function _extractCover(file, idx) {
         const url  = URL.createObjectURL(blob);
         store.playlist[idx].cover = url;
         _setCoverEl(`cov-${idx}`, url);
-        // URL non revocato: serve per MediaSession e expanded player
       },
     });
   }
@@ -188,7 +217,6 @@ function _extractDuration(file, idx) {
 
 /* ═══════════════════════════════════════════════════════════════════
    SWIPE su track item → aggiunge alla coda
-   sinistra → in fondo ↓    destra → in cima ↑
    ═══════════════════════════════════════════════════════════════════ */
 
 function _setupSwipe(el, item) {
@@ -209,7 +237,7 @@ function _setupSwipe(el, item) {
 
     if (!swiping) {
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) swiping = true;
-      else if (Math.abs(dy) > 10) return; // scroll verticale → ignora
+      else if (Math.abs(dy) > 10) return;
     }
     if (!swiping) return;
 
@@ -227,7 +255,7 @@ function _setupSwipe(el, item) {
     el.style.background = '';
 
     if (swiping && Math.abs(deltaX) > THRESHOLD) {
-      enqueue(item, deltaX > 0); // true = in cima
+      enqueue(item, deltaX > 0);
     }
     deltaX = 0;
   }, { passive: true });
@@ -248,7 +276,6 @@ function _makeFolderGroup(path) {
   const tracks = document.createElement('div');
   tracks.className = 'folder-tracks';
 
-  // Click sull'header → espandi/collassa
   header.addEventListener('click', () => {
     tracks.hidden = !tracks.hidden;
   });
@@ -256,3 +283,4 @@ function _makeFolderGroup(path) {
   group.append(header, tracks);
   return group;
 }
+
