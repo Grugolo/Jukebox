@@ -22,6 +22,6 @@ export const store = {
   ytReady:     false,
   ytPending:   null,    // videoId da caricare quando ytPlayer è pronto
   currentYTId: null,
-  currentYTItem: null,  // FIX: oggetto YT corrente (per cronologia e shuffle)
+  currentYTItem: null,  // oggetto YT corrente (per cronologia e shuffle)
   ytResults:   [],
 };
