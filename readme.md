@@ -1,4 +1,4 @@
-# Grugofy 🎵
+# Grugofy
 
 Player musicale mobile-first per browser, senza backend. Riproduce file locali (audio/video) e video YouTube direttamente dal browser.
 
