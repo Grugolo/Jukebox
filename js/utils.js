@@ -63,7 +63,7 @@ export function fmtDateShort(d) {
   const dt = (d instanceof Date) ? d : new Date(d);
   if (isNaN(dt)) return '';
   const yy = String(dt.getFullYear()).slice(-2);
-  const m  = dt.getMonth() + 1;
-  const g  = dt.getDate();
+  const mm = dt.getMonth() + 1;
+  const gg = dt.getDate();
   return `'${yy}/${m}/${g}`;
 }
