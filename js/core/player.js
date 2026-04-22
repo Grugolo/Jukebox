@@ -47,7 +47,7 @@ function _silentDeactivate() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   SEEKBAR POLL per YouTube (250ms)
+   SEEKBAR POLL per YouTube (1000ms)
    ═══════════════════════════════════════════════════════════════════ */
 let _ytPollTimer = null;
 let _pollTick    = 0;
@@ -80,7 +80,7 @@ export function startYTSeekPoll() {
     // Ri-registra i handler ogni ~5s (Brave li azzera spesso)
     if (++_pollTick % 20 === 0) _bindMediaSession();
 
-  }, 250);
+  }, 1000);
 }
 
 export function stopYTSeekPoll() {
