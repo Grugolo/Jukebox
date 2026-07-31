@@ -111,8 +111,8 @@ function _makeCollapsible(sectionId, titleSelector) {
 }
 
 window.addEventListener('load', () => {
-  _makeCollapsible('queueSection',    '.section-title');
-  _makeCollapsible('playlistSection', '.section-title');
+  _makeCollapsible('queueSection');
+  _makeCollapsible('playlistSection');
   
   // Libreria: header con span.section-title
   const libTitle = document.querySelector('#mainContent > .section-title');
