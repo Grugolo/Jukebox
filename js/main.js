@@ -89,45 +89,35 @@ if ("serviceWorker" in navigator) {
 // Per la libreria, ogni folder-group ha già il suo handler in localFiles.js.
 // Qui gestiamo le sezioni fisse: queueSection e playlistSection.
 
-function _makeCollapsible(sectionId, titleSelector) {
-  const section = document.getElementById(sectionId);
-  if (!section) return;
-  const header = section.querySelector(titleSelector);
-  if (!header) return;
-  const body = section.querySelector('[data-collapsible-body]');
-  if (!body) return;
 
-  header.style.cursor = 'pointer';
-  header.style.userSelect = 'none';
-
-  // Stato iniziale: espanso
-  let collapsed = false;
-
-  header.addEventListener('click', () => {
-    collapsed = !collapsed;
-    body.style.display = collapsed ? 'none' : '';
-    header.dataset.collapsed = collapsed ? '1' : '';
-  });
-}
 
 window.addEventListener('load', () => {
-  _makeCollapsible('queueSection', '.section-header');
-  _makeCollapsible('playlistSection', '.section-header');
-  
-  // Libreria: header con span.section-title
-  const libTitle = document.querySelector('#mainContent > .section-title');
-  const libEl    = document.getElementById('library');
-  if (libTitle && libEl) {
-    libTitle.style.cursor     = 'pointer';
-    libTitle.style.userSelect = 'none';
-    let libCollapsed = false;
-    libTitle.addEventListener('click', () => {
-      libCollapsed = !libCollapsed;
-      libEl.style.display = libCollapsed ? 'none' : '';
-      libTitle.dataset.collapsed = libCollapsed ? '1' : '';
-    });
-  }
+  // ── Gestore Universale per Collassare le Sezioni ──────────────────────
+  const mainContent = document.getElementById('mainContent');
 
+  mainContent.addEventListener('click', (e) => {
+    // 1. Controlla se il click è avvenuto su un .section-title
+    const titleEl = e.target.closest('.section-title');
+    if (!titleEl) return;
+
+    // 2. Trova il blocco principale (la <section> o l'elemento contenitore)
+    const section = titleEl.closest('section') || mainContent;
+
+    // 3. Trova il corpo da nascondere: 
+    //    cerca prima [data-collapsible-body], altrimenti usa l'elemento immediatamente successivo (es. #library)
+    const body = section.querySelector('[data-collapsible-body]') || titleEl.nextElementSibling;
+
+    if (body) {
+      // Alterna la visibilità (se è 'none' ripristina, altrimenti imposta 'none')
+      const isCollapsed = body.style.display === 'none';
+      body.style.display = isCollapsed ? '' : 'none';
+      
+      // Aggiorna un attributo dataset per eventuale CSS (es. ruotare freccette)
+      titleEl.dataset.collapsed = !isCollapsed ? '1' : '0';
+    }
+  });
+
+  
 
   updateUI();
   renderQueue();
@@ -166,6 +156,9 @@ window.addEventListener('load', () => {
     renderQueue();
   }
 });
+
+
+
 
 window._playLocal   = playLocal;
 window.togglePlayer = togglePlayer;
