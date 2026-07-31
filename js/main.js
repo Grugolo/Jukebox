@@ -69,10 +69,7 @@ titleEl.addEventListener('touchend', e => {
 
 
 
-
-
-
-
+/* ── Register Service Worker ───────────────────────────────────────────── */
 if ("serviceWorker" in navigator) {
     window.addEventListener("load", async () => {
         try {
