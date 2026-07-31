@@ -84,6 +84,50 @@ if ("serviceWorker" in navigator) {
 
 
 
+/* ── Collassabilità sezioni (coda, playlist, libreria) ──────────── */
+// Deleghiamo i click sugli header di sezione presenti nell'HTML statico.
+// Per la libreria, ogni folder-group ha già il suo handler in localFiles.js.
+// Qui gestiamo le sezioni fisse: queueSection e playlistSection.
+
+function _makeCollapsible(sectionId, titleSelector) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  const header = section.querySelector(titleSelector);
+  if (!header) return;
+  const body = section.querySelector('[data-collapsible-body]');
+  if (!body) return;
+
+  header.style.cursor = 'pointer';
+  header.style.userSelect = 'none';
+
+  // Stato iniziale: espanso
+  let collapsed = false;
+
+  header.addEventListener('click', () => {
+    collapsed = !collapsed;
+    body.style.display = collapsed ? 'none' : '';
+    header.dataset.collapsed = collapsed ? '1' : '';
+  });
+}
+
+window.addEventListener('load', () => {
+  _makeCollapsible('queueSection',    '.section-title');
+  _makeCollapsible('playlistSection', '.section-title');
+  
+  // Libreria: header con span.section-title
+  const libTitle = document.querySelector('#mainContent > .section-title');
+  const libEl    = document.getElementById('library');
+  if (libTitle && libEl) {
+    libTitle.style.cursor     = 'pointer';
+    libTitle.style.userSelect = 'none';
+    let libCollapsed = false;
+    libTitle.addEventListener('click', () => {
+      libCollapsed = !libCollapsed;
+      libEl.style.display = libCollapsed ? 'none' : '';
+      libTitle.dataset.collapsed = libCollapsed ? '1' : '';
+    });
+  }
+
 
   updateUI();
   renderQueue();
