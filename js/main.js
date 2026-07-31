@@ -66,6 +66,30 @@ titleEl.addEventListener('touchend', e => {
   }
 }, { passive: true });
 
+
+
+
+
+
+
+
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", async () => {
+        try {
+            const registration = await navigator.serviceWorker.register("./service-worker.js");
+
+            console.log("Service Worker registered:", registration.scope);
+        } catch (err) {
+            console.error("Service Worker registration failed:", err);
+        }
+    });
+}
+
+
+
+
+
+
 /* ── Collassabilità sezioni (coda, playlist, libreria) ──────────── */
 // Deleghiamo i click sugli header di sezione presenti nell'HTML statico.
 // Per la libreria, ogni folder-group ha già il suo handler in localFiles.js.
