@@ -68,24 +68,20 @@ async function _search(q) {
     );
     const detailData = await detailRes.json();
 
-    const durationMap = Object.fromEntries(
-  (detailData.items || []).map(v => [v.id, parseISO8601(v.contentDetails?.duration)])
-);
+const durationMap = Object.fromEntries(
+      (detailData.items || []).map(v => [v.id, parseISO8601(v.contentDetails.duration)])
+    );
 
-store.ytResults = items.map(item => {
-  const videoId = typeof item.id === 'object' ? item.id.videoId : item.id;
-
-  return {
-    type:        'youtube',
-    id:          videoId,
-    title:       decodeHtml(item.snippet?.title || ''),
-    thumb:       item.snippet?.thumbnails?.medium?.url || '',
-    duration:    durationMap[videoId] || 0,
-    uploader:    decodeHtml(item.snippet?.channelTitle || 'YouTube'),
-    publishedAt: item.snippet?.publishedAt || null,
-  };
-});
-
+    store.ytResults = items.map(item => ({
+      type:        'youtube',
+      id:          item.id.videoId,
+      title:       decodeHtml(item.snippet?.title || ''),
+      thumb:       item.snippet.thumbnails?.medium?.url || '',
+      duration:    durationMap[item.id.videoId] || 0,
+      uploader:    decodeHtml(item.snippet?.channelTitle || 'YouTube'),
+      publishedAt: item.snippet.publishedAt || null,
+    }));
+    
     if (reqId !== _lastReqId) return;
     _renderResults(store.ytResults);
 
