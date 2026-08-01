@@ -75,7 +75,7 @@ async function _search(q) {
     store.ytResults = items.map(item => ({
       type:        'youtube',
       id:          item.id.videoId,
-      title:       decodeHtml(item.snippet.title),
+      title:       decodeHtml(item.snippet.title): item.name.replace(/\.[^/.]+$/, '').replaceAll('&#39;''' '),
       thumb:       item.snippet.thumbnails?.medium?.url || '',
       duration:    durationMap[item.id.videoId] || 0,
       uploader:    decodeHtml(item.snippet.channelTitle || 'YouTube'),
