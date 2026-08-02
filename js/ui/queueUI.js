@@ -4,13 +4,15 @@
 import { store }       from '../core/store.js';
 import { escHtml, showToast } from '../utils.js';
 import {
-  removeFromQueue, reorderQueue,
+  removeFromQueue, reorderQueue, clearQueue,
   loadPlaylists,
   saveQueueAsPlaylist,
   saveHistoryAsPlaylist,
   loadPlaylistIntoQueue,
   deletePlaylist,
+  exportAllPlaylists,
 } from '../core/queue.js';
+
 
 /* ── DOM refs ───────────────────────────────────────────────────── */
 const queueListEl    = document.getElementById('queueList');
@@ -88,6 +90,26 @@ document.getElementById('saveHistoryBtn').onclick = () => {
   const name  = prompt('Nome playlist:', `${date} ${_fmt(start)} - ${_fmt(now)}`);
   if (name) saveHistoryAsPlaylist(name);
 };
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   AZIONI AZZERAMENTO CODA ED ESPORTAZIONE
+   ═══════════════════════════════════════════════════════════════════ */
+
+// Pulsante Svuota Coda (con conferma rapida)
+document.getElementById('clearQueueBtn').onclick = () => {
+  if (!store.queue.length) return;
+  if (confirm('Vuoi davvero svuotare la coda?')) {
+    clearQueue();
+  }
+};
+
+// Pulsante Esporta Tutte le Playlist
+document.getElementById('exportAllPlaylistsBtn').onclick = () => {
+  exportAllPlaylists();
+};
+
+
 
 /* ═══════════════════════════════════════════════════════════════════
    PLAYLIST SALVATE
