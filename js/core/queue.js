@@ -215,7 +215,11 @@ export function queueTotalSeconds() {
 
 /* ── Esporta playlist salvate in LocalStorage come .txt scaricabile ─────────────────────────────────── */
 
-export function exportAllPlaylists() {
+/**
+ * Esporta tutte le playlist salvate in LocalStorage creando un archivio .ZIP.
+ * Ogni playlist diventa un file .txt separato (nomeplaylist.txt).
+ */
+export async function exportAllPlaylists() {
   const all = loadPlaylists();
   const names = Object.keys(all);
 
@@ -224,38 +228,56 @@ export function exportAllPlaylists() {
     return;
   }
 
-  let textContent = '';
+  // Verifica che JSZip sia caricato
+  if (typeof JSZip === 'undefined') {
+    showToast('Errore: Libreria JSZip non caricata');
+    return;
+  }
+
+  const zip = new JSZip();
 
   names.forEach(name => {
-    textContent += `=== PLAYLIST: ${name} ===\n`;
+    let textContent = '';
+
     all[name].forEach(entry => {
       if (entry.yt) {
         // Formato YT: Titolo, ID_Video, Durata
         textContent += `${entry.title}, ${entry.id}, ${entry.duration || 0}\n`;
       } else {
-        // Formato Locale: Cartella, NomeFile
-        textContent += `${entry.f}, ${entry.n}\n`;
+        // Formato Locale: NomeFile, NomeCartella (Cartella sposta in seconda colonna)
+        textContent += `${entry.n}, ${entry.f}\n`;
       }
     });
-    textContent += '\n';
+
+    // Pulisce il nome della playlist per evitare caratteri non validi nei file
+    const safeFileName = name.replace(/[/\\?%*:|"<>]/g, '_');
+    
+    // Aggiunge il file .txt all'archivio ZIP
+    zip.file(`${safeFileName}.txt`, textContent);
   });
 
-  // Creazione del file Blob e trigger del download
-  const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  
-  a.href     = url;
-  a.download = `Grugofy_Playlists_${new Date().toISOString().slice(0, 10)}.txt`;
-  document.body.appendChild(a);
-  a.click();
-  
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  
-  showToast('Playlists esportate!');
-}
+  try {
+    showToast('Generazione file ZIP in corso...');
+    
+    // Genera l'archivio ZIP in memoria
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
 
+    a.href     = url;
+    a.download = `Grugofy_Playlists_${new Date().toISOString().slice(0, 10)}.zip`;
+    document.body.appendChild(a);
+    a.click();
+
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('Playlists esportate in ZIP!');
+  } catch (err) {
+    console.error('Errore durante la creazione dello ZIP:', err);
+    showToast('Errore durante l\'esportazione');
+  }
+}
 
 
 
