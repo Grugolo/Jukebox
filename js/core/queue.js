@@ -210,3 +210,53 @@ export function queueTotalSeconds() {
     return acc;
   }, 0);
 }
+
+
+
+/* ── Esporta playlist salvate in LocalStorage come .txt scaricabile ─────────────────────────────────── */
+
+export function exportAllPlaylists() {
+  const all = loadPlaylists();
+  const names = Object.keys(all);
+
+  if (!names.length) {
+    showToast('Nessuna playlist da esportare');
+    return;
+  }
+
+  let textContent = '';
+
+  names.forEach(name => {
+    textContent += `=== PLAYLIST: ${name} ===\n`;
+    all[name].forEach(entry => {
+      if (entry.yt) {
+        // Formato YT: Titolo, ID_Video, Durata
+        textContent += `${entry.title}, ${entry.id}, ${entry.duration || 0}\n`;
+      } else {
+        // Formato Locale: Cartella, NomeFile
+        textContent += `${entry.f}, ${entry.n}\n`;
+      }
+    });
+    textContent += '\n';
+  });
+
+  // Creazione del file Blob e trigger del download
+  const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  
+  a.href     = url;
+  a.download = `Grugofy_Playlists_${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  showToast('Playlists esportate!');
+}
+
+
+
+
+
