@@ -3,6 +3,7 @@ import { store }          from './store.js';
 import { showToast, fmtDateShort } from '../utils.js';
 import { saveState }      from './persist.js';
 import { emit, EV }       from './events.js';
+import JSZip from 'https://esm.sh/jszip@3.10.1';
 
 const LS_KEY = 'f_p';
 
@@ -213,24 +214,15 @@ export function queueTotalSeconds() {
 
 
 
-/* ── Esporta playlist salvate in LocalStorage come .txt scaricabile ─────────────────────────────────── */
+/* ── Esporta tutte le playlist salvate in LocalStorage creando un archivio .ZIP ─────────────────────────────────── */
 
-/**
- * Esporta tutte le playlist salvate in LocalStorage creando un archivio .ZIP.
- * Ogni playlist diventa un file .txt separato (nomeplaylist.txt).
- */
+
 export async function exportAllPlaylists() {
   const all = loadPlaylists();
   const names = Object.keys(all);
 
   if (!names.length) {
     showToast('Nessuna playlist da esportare');
-    return;
-  }
-
-  // Verifica che JSZip sia caricato
-  if (typeof JSZip === 'undefined') {
-    showToast('Errore: Libreria JSZip non caricata');
     return;
   }
 
@@ -244,12 +236,12 @@ export async function exportAllPlaylists() {
         // Formato YT: Titolo, ID_Video, Durata
         textContent += `${entry.title}, ${entry.id}, ${entry.duration || 0}\n`;
       } else {
-        // Formato Locale: NomeFile, NomeCartella (Cartella sposta in seconda colonna)
+        // Formato Locale: NomeFile, NomeCartella
         textContent += `${entry.n}, ${entry.f}\n`;
       }
     });
 
-    // Pulisce il nome della playlist per evitare caratteri non validi nei file
+    // Pulisce il nome della playlist per evitare caratteri non validi
     const safeFileName = name.replace(/[/\\?%*:|"<>]/g, '_');
     
     // Aggiunge il file .txt all'archivio ZIP
@@ -257,9 +249,8 @@ export async function exportAllPlaylists() {
   });
 
   try {
-    showToast('Generazione file ZIP in corso...');
+    showToast('Generazione ZIP in corso...');
     
-    // Genera l'archivio ZIP in memoria
     const blob = await zip.generateAsync({ type: 'blob' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -272,13 +263,12 @@ export async function exportAllPlaylists() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 
-    showToast('Playlists esportate in ZIP!');
+    showToast('Playlists esportate!');
   } catch (err) {
-    console.error('Errore durante la creazione dello ZIP:', err);
+    console.error('Errore creazione ZIP:', err);
     showToast('Errore durante l\'esportazione');
   }
 }
-
 
 
 
