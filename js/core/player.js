@@ -447,16 +447,41 @@ function _mediaSessionLocal(track, title) {
   _bindMediaSession();
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   MEDIA SESSION FORZATA (Notifiche & Lockscreen)
+   ═══════════════════════════════════════════════════════════════════ */
+
 function _mediaSessionYT(item) {
   if (!('mediaSession' in navigator)) return;
+
+  // 1. Forza la presenza dell'Artwork per far attivare il widget grande dell'OS
   navigator.mediaSession.metadata = new MediaMetadata({
     title:   item.title,
     artist:  item.uploader || 'YouTube',
+    album:   'YouTube Stream',
     artwork: item.thumb
-      ? [{ src: item.thumb, sizes: '320x180', type: 'image/jpeg' }]
-      : [],
+      ? [
+          { src: item.thumb, sizes: '96x96',   type: 'image/jpeg' },
+          { src: item.thumb, sizes: '128x128', type: 'image/jpeg' },
+          { src: item.thumb, sizes: '192x192', type: 'image/jpeg' },
+          { src: item.thumb, sizes: '512x512', type: 'image/jpeg' },
+        ]
+      : []
   });
+
+  // 2. Forza lo stato a PLAYING (sblocca l'interfaccia notifica)
   navigator.mediaSession.playbackState = 'playing';
+
+  // 3. Imposta una posizione iniziale fittizia per obbligare Chrome/Brave 
+  // a mostrare la barra di avanzamento e i pulsanti prev/next
+  try {
+    navigator.mediaSession.setPositionState({
+      duration:     item.duration || 180, // Se non c'è durata, usa un placeholder di 3 min
+      playbackRate: 1,
+      position:     0,
+    });
+  } catch (_) {}
+
   _bindMediaSession();
 }
 
@@ -464,20 +489,35 @@ function _bindMediaSession() {
   if (!('mediaSession' in navigator)) return;
   const ms = navigator.mediaSession;
 
+  // Assegnare esplicitamente null prima o riassegnare gli handler 
+  // forza l'aggiornamento grafico dei tasti nella tendina di Android/iOS
   ms.setActionHandler('play',          () => togglePlay());
   ms.setActionHandler('pause',         () => togglePlay());
   ms.setActionHandler('previoustrack', () => playPrev());
   ms.setActionHandler('nexttrack',     () => playNext());
 
+  // Aggiunta di seekforward/seekbackward: sui dispositivi Android/Brave
+  // abilitare questi due handler costringe l'OS a mostrare i controlli estesi.
   ms.setActionHandler('seekbackward', (d) => {
-    if (store.currentYTId) return;
-    const s = d?.seekOffset ?? 10;
-    mediaEl.currentTime = Math.max(0, mediaEl.currentTime - s);
+    if (store.currentYTId && store.ytPlayer) {
+      try {
+        const cur = store.ytPlayer.getCurrentTime() || 0;
+        store.ytPlayer.seekTo(Math.max(0, cur - 10), true);
+      } catch (_) {}
+    } else {
+      mediaEl.currentTime = Math.max(0, mediaEl.currentTime - 10);
+    }
   });
+
   ms.setActionHandler('seekforward', (d) => {
-    if (store.currentYTId) return;
-    const s = d?.seekOffset ?? 10;
-    mediaEl.currentTime = Math.min(mediaEl.duration || 0, mediaEl.currentTime + s);
+    if (store.currentYTId && store.ytPlayer) {
+      try {
+        const cur = store.ytPlayer.getCurrentTime() || 0;
+        store.ytPlayer.seekTo(cur + 10, true);
+      } catch (_) {}
+    } else {
+      mediaEl.currentTime = Math.min(mediaEl.duration || 0, mediaEl.currentTime + 10);
+    }
   });
 
   try { ms.setActionHandler('stop', () => togglePlay()); } catch (_) {}
