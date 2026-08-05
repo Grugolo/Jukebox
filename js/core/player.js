@@ -31,7 +31,6 @@ _silentEl.loop   = true;
 _silentEl.volume = 0;
 
 // Ogni volta che il silent anchor parte, ri-registra i handler.
-// Brave li annulla a ogni cambio di stato audio.
 _silentEl.onplay = () => _bindMediaSession();
 
 function _silentActivate() {
@@ -168,8 +167,21 @@ export function playYT(item) {
 
   _ytWrapperVisible(true);
 
+  // Mantiene sveglio il Media Thread per il cambio in background
+  _silentActivate();
+
   if (store.ytReady && store.ytPlayer) {
-    store.ytPlayer.loadVideoById(item.id);
+    try {
+      store.ytPlayer.loadVideoById(item.id);
+      
+      // FIX BACKGROUND: Se l'app è a schermo spento, forza il playVideo dopo un breve ritardo
+      // per superare il congelamento dell'IFrame
+      setTimeout(() => {
+        if (store.ytPlayer && store.ytPlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+          store.ytPlayer.playVideo();
+        }
+      }, 300);
+    } catch (_) {}
   } else {
     store.ytPending = item.id;
     _ensureYTScript();
@@ -179,11 +191,7 @@ export function playYT(item) {
   saveState();
   emit(EV.VISUAL_UPDATE);
 
-  // Attiva subito il silent anchor + MediaSession.
-  // setPositionState con duration fittizia sblocca prev/next
-  // nella tendina di sistema anche prima che il poll parta.
   _mediaSessionYT(item);
-  _silentActivate();
   if ('mediaSession' in navigator) {
     try {
       navigator.mediaSession.setPositionState({
@@ -207,6 +215,7 @@ export function togglePlay() {
       if (state === YT.PlayerState.PLAYING) {
         store.ytPlayer.pauseVideo();
       } else {
+        _silentActivate();
         store.ytPlayer.playVideo();
       }
     } catch (_) {}
@@ -305,7 +314,6 @@ mediaEl.ontimeupdate = () => {
   timeCurrent.textContent = formatTime(mediaEl.currentTime);
   timeTotal.textContent   = formatTime(mediaEl.duration);
 
-  // Aggiorna posizione nella notifica di sistema
   if ('mediaSession' in navigator && mediaEl.duration > 0) {
     try {
       navigator.mediaSession.setPositionState({
@@ -322,13 +330,13 @@ mediaEl.ontimeupdate = () => {
 };
 
 mediaEl.onplay = () => {
-  emit(EV.PLAYER_CHANGE, { playing: true });   // ← aggiungi detail
+  emit(EV.PLAYER_CHANGE, { playing: true });
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
   _bindMediaSession();
 };
 
 mediaEl.onpause = () => {
-  emit(EV.PLAYER_CHANGE, { playing: false });  // ← aggiungi detail
+  emit(EV.PLAYER_CHANGE, { playing: false });
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
   _bindMediaSession();
 };
@@ -356,6 +364,11 @@ window.onYouTubeIframeAPIReady = () => {
           store.ytPending = null;
         }
       },
+      onError: (e) => {
+        // Se un video YT fallisce in background (es. non disponibile o limitazione age), passa al successivo
+        console.warn('YouTube Player error:', e.data);
+        playNext();
+      },
       onStateChange: (e) => {
         if (e.data === YT.PlayerState.PLAYING) {
           emit(EV.YT_PLAYING);
@@ -369,7 +382,6 @@ window.onYouTubeIframeAPIReady = () => {
 
         if (e.data === YT.PlayerState.PAUSED) {
           stopYTSeekPoll();
-          // NON fermare _silentEl: Brave rimuoverebbe i controlli di sistema
           if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'paused';
             _bindMediaSession();
@@ -381,7 +393,9 @@ window.onYouTubeIframeAPIReady = () => {
           if (store.looping && store.ytReady && store.ytPlayer) {
             try { store.ytPlayer.seekTo(0); store.ytPlayer.playVideo(); } catch (_) {}
           } else {
-            playNext();
+            // Delay minimo prima di chiamare la traccia successiva
+            // per permettere alla MediaSession di sincronizzarsi
+            setTimeout(() => playNext(), 50);
           }
         }
 
@@ -455,8 +469,6 @@ function _bindMediaSession() {
   ms.setActionHandler('previoustrack', () => playPrev());
   ms.setActionHandler('nexttrack',     () => playNext());
 
-  // seekbackward/seekforward: richiesti da molti dispositivi BT
-  // per file locali fanno seek; per YT vengono ignorati
   ms.setActionHandler('seekbackward', (d) => {
     if (store.currentYTId) return;
     const s = d?.seekOffset ?? 10;
@@ -468,7 +480,5 @@ function _bindMediaSession() {
     mediaEl.currentTime = Math.min(mediaEl.duration || 0, mediaEl.currentTime + s);
   });
 
-  // stop: alcuni dispositivi BT lo inviano al posto di pause
   try { ms.setActionHandler('stop', () => togglePlay()); } catch (_) {}
 }
-
