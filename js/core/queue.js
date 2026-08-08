@@ -124,94 +124,68 @@ export function deletePlaylist(name) {
 }
 
 /**
- * Importa una playlist da un array di righe di testo
- * @param {string} name - Nome della playlist
- * @param {string[]} lines - Righe del file .txt
+ * Importa una playlist da array di righe testo (da file .txt).
+ * Formato riga: "titolo, id_o_path, durata_secondi"
+ * Se c'è solo il titolo (senza virgole), cerca su YT e carica il primo risultato.
  */
 export async function importPlaylistFromLines(name, lines) {
-  if (!lines || !lines.length) return;
-
   const { YT_API_KEY } = await import('../config.js');
-  const parsedItems = [];
+  const entries = [];
 
   for (const rawLine of lines) {
-    const line = rawLine.replace(/\r/g, '').trim();
-
-    // Ignora righe vuote o commenti
-    if (!line || line.startsWith('#')) continue;
+    const line = rawLine.trim();
+    if (!line) continue;
 
     const parts = line.split(',').map(p => p.trim());
 
-    // 1. Formato Esportato CSV (almeno 2 campi: Titolo, ID/Filename, [Durata/Cartella])
     if (parts.length >= 2) {
-      const [col1, col2, col3] = parts;
+      // Ha almeno titolo + id/path
+      const title    = parts[0];
+      const idOrPath = parts[1];
+      const duration = parseInt(parts[2]) || 0;
 
-      if (/^[A-Za-z0-9_-]{11}$/.test(col2)) {
-        parsedItems.push({
-          yt: true,
-          id: col2,
-          title: col1,
-          duration: parseInt(col3, 10) || 0
+      // Determina se è un id YT (11 chars alfanumerici) o un filename
+      if (/^[A-Za-z0-9_-]{11}$/.test(idOrPath)) {
+        entries.push({
+          yt:       true,
+          id:       idOrPath,
+          title,
+          duration,
         });
       } else {
-        parsedItems.push({
-          n: col1,
-          f: col2,
-          yt: false
-        });
+        // È un file locale
+        entries.push({ n: idOrPath, f: title });
       }
-    } 
-    // 2. URL diretto di YouTube
-    else if (line.includes('youtube.com/') || line.includes('youtu.be/')) {
-      const match = line.match(/(?:v=|\/)([\w-]{11})/);
-      if (match) {
-        parsedItems.push({
-          yt: true,
-          id: match[1],
-          title: `YouTube Track (${match[1]})`,
-          duration: 0
-        });
-      }
-    } 
-    // 3. Testo semplice: Cerca il brano su YouTube Data API
-    else {
+    } else {
+      // Solo nome: cerca su YT
       try {
-        const res = await fetch(
+        const res  = await fetch(
           `https://www.googleapis.com/youtube/v3/search` +
           `?part=snippet&type=video&maxResults=1` +
           `&q=${encodeURIComponent(line)}&key=${YT_API_KEY}`
         );
         const data = await res.json();
         const item = data.items?.[0];
-
         if (item) {
-          parsedItems.push({
-            yt: true,
-            id: item.id.videoId,
+          entries.push({
+            yt:    true,
+            id:    item.id.videoId,
             title: item.snippet.title,
-            duration: 0
+            duration: 0,
           });
         }
-      } catch (err) {
-        console.error(`Errore nella ricerca YT per "${line}":`, err);
-      }
+      } catch (_) {}
     }
   }
 
-  if (!parsedItems.length) {
-    showToast('Nessun brano valido trovato nel file');
-    return;
-  }
+  if (!entries.length) { showToast('Nessun brano trovato'); return; }
 
-  // Salvataggio nello storage e aggiornamento UI
-  const allPlaylists = loadPlaylists();
-  allPlaylists[name] = parsedItems;
-  localStorage.setItem(LS_KEY, JSON.stringify(allPlaylists));
+  const all = loadPlaylists();
+  all[name] = entries;
+  localStorage.setItem(LS_KEY, JSON.stringify(all));
   _refreshPlaylistUI();
-
-  showToast(`Playlist "${name}" importata (${parsedItems.length} brani)`);
+  showToast(`Playlist "${name}" importata`);
 }
-
 
 function _serialize(item) {
   if (item?.type === 'youtube') return { yt: true, id: item.id, title: item.title, duration: item.duration || 0 };
