@@ -131,72 +131,82 @@ export function deletePlaylist(name) {
 export async function importPlaylistFromLines(name, lines) {
   if (!lines || !lines.length) return;
 
+  const { YT_API_KEY } = await import('../config.js');
   const parsedItems = [];
 
-  lines.forEach(rawLine => {
-    // 1. Rimuove \r, spazi iniziali e finali
+  for (const rawLine of lines) {
     const line = rawLine.replace(/\r/g, '').trim();
 
     // Ignora righe vuote o commenti
-    if (!line || line.startsWith('#')) return;
+    if (!line || line.startsWith('#')) continue;
 
-    // 2. Controllo Formato Esportato (Titolo, ID/Nome, Durata/Cartella)
     const parts = line.split(',').map(p => p.trim());
 
+    // 1. Formato Esportato CSV (almeno 2 campi: Titolo, ID/Filename, [Durata/Cartella])
     if (parts.length >= 2) {
       const [col1, col2, col3] = parts;
 
-      // Se il secondo campo è un ID YouTube valido (11 caratteri alfanumerici)
-      if (col2.length === 11 && !col2.includes('.') && !col2.includes(' ')) {
+      if (/^[A-Za-z0-9_-]{11}$/.test(col2)) {
         parsedItems.push({
+          yt: true,
           id: col2,
           title: col1,
-          duration: parseInt(col3, 10) || 0,
-          yt: true
+          duration: parseInt(col3, 10) || 0
         });
       } else {
-        // Altrimenti è considerato un file Locale (NomeFile, Cartella)
-        // Gestisce anche eventuali virgole extra nel nome riconnettendo il testo
         parsedItems.push({
           n: col1,
-          f: parts.slice(1).join(','), // ricompone la cartella se conteneva virgole
+          f: col2,
           yt: false
         });
       }
     } 
-    // 3. Fallback: Se la riga è un URL diretto di YouTube
+    // 2. URL diretto di YouTube
     else if (line.includes('youtube.com/') || line.includes('youtu.be/')) {
       const match = line.match(/(?:v=|\/)([\w-]{11})/);
       if (match) {
         parsedItems.push({
+          yt: true,
           id: match[1],
           title: `YouTube Track (${match[1]})`,
-          duration: 0,
-          yt: true
+          duration: 0
         });
       }
-    }
-    // 4. Fallback: Se la riga è semplicemente un nome traccia/file
+    } 
+    // 3. Testo semplice: Cerca il brano su YouTube Data API
     else {
-      parsedItems.push({
-        n: line,
-        f: 'File Locali',
-        yt: false
-      });
+      try {
+        const res = await fetch(
+          `https://www.googleapis.com/youtube/v3/search` +
+          `?part=snippet&type=video&maxResults=1` +
+          `&q=${encodeURIComponent(line)}&key=${YT_API_KEY}`
+        );
+        const data = await res.json();
+        const item = data.items?.[0];
+
+        if (item) {
+          parsedItems.push({
+            yt: true,
+            id: item.id.videoId,
+            title: item.snippet.title,
+            duration: 0
+          });
+        }
+      } catch (err) {
+        console.error(`Errore nella ricerca YT per "${line}":`, err);
+      }
     }
-  });
+  }
 
   if (!parsedItems.length) {
     showToast('Nessun brano valido trovato nel file');
     return;
   }
 
-  // Salvataggio nello store / LocalStorage (Sostituito savePlaylists errato)
+  // Salvataggio nello storage e aggiornamento UI
   const allPlaylists = loadPlaylists();
   allPlaylists[name] = parsedItems;
   localStorage.setItem(LS_KEY, JSON.stringify(allPlaylists));
-
-  // Aggiorna l'interfaccia delle playlist
   _refreshPlaylistUI();
 
   showToast(`Playlist "${name}" importata (${parsedItems.length} brani)`);
