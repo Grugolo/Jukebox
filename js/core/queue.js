@@ -146,8 +146,8 @@ export async function importPlaylistFromLines(name, lines) {
     if (parts.length >= 2) {
       const [col1, col2, col3] = parts;
 
-      // Se il secondo campo è un ID YouTube valido (11 caratteri)
-      if (col2.length === 11 && !col2.includes('.')) {
+      // Se il secondo campo è un ID YouTube valido (11 caratteri alfanumerici)
+      if (col2.length === 11 && !col2.includes('.') && !col2.includes(' ')) {
         parsedItems.push({
           id: col2,
           title: col1,
@@ -156,9 +156,10 @@ export async function importPlaylistFromLines(name, lines) {
         });
       } else {
         // Altrimenti è considerato un file Locale (NomeFile, Cartella)
+        // Gestisce anche eventuali virgole extra nel nome riconnettendo il testo
         parsedItems.push({
           n: col1,
-          f: col2,
+          f: parts.slice(1).join(','), // ricompone la cartella se conteneva virgole
           yt: false
         });
       }
@@ -190,10 +191,13 @@ export async function importPlaylistFromLines(name, lines) {
     return;
   }
 
-  // Salvataggio nello store/LocalStorage
+  // Salvataggio nello store / LocalStorage (Sostituito savePlaylists errato)
   const allPlaylists = loadPlaylists();
   allPlaylists[name] = parsedItems;
-  savePlaylists(allPlaylists);
+  localStorage.setItem(LS_KEY, JSON.stringify(allPlaylists));
+
+  // Aggiorna l'interfaccia delle playlist
+  _refreshPlaylistUI();
 
   showToast(`Playlist "${name}" importata (${parsedItems.length} brani)`);
 }
